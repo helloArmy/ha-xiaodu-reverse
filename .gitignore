@@ -17,6 +17,15 @@ ref-hass-xiaodu/
 .DS_Store
 Thumbs.db
 
+# 本地工具与临时凭据（绝不提交）
+.tools/
+*.token
+token.txt
+device.json
+
+# codegraph 索引（本机生成，不入库）
+.codegraph/
+
 # Home Assistant 本地运行数据
 .homeassistant/
 *.log
