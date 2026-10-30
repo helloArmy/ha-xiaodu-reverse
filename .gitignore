@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+
+# 本地参考仓库（仅用于开发比对，不参与发布）
+ref-ha-xiaodu/
+ref-hass-xiaodu/
+
+# 编辑器 / 系统
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Home Assistant 本地运行数据
+.homeassistant/
+*.log

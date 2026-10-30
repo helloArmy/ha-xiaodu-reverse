@@ -1,0 +1,121 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "小度反向接入",
+        "description": "选择登录方式。推荐使用百度账号密码登录，集成可在凭据失效时自动续期。",
+        "data": {
+          "login_mode": "登录方式"
+        }
+      },
+      "login": {
+        "title": "百度账号登录",
+        "description": "使用小度 App 绑定的百度账号登录。\n\n建议同时填写 BAIDUID：在浏览器打开 {cookie_url} 并登录后，从开发者工具中复制 `BAIDUID` 的 Cookie 值（形如 `XXXX...:FG=1`），可显著降低被风控要求短信验证的概率。",
+        "data": {
+          "username": "百度账号（手机号/邮箱/用户名）",
+          "password": "密码",
+          "baiduid": "BAIDUID（可选，建议填写）"
+        }
+      },
+      "sms_verify": {
+        "title": "短信验证",
+        "description": "百度风控要求短信验证。{detail}",
+        "data": {
+          "verifycode": "短信验证码"
+        }
+      },
+      "cookie": {
+        "title": "Cookie 登录",
+        "description": "在浏览器打开 {cookie_url} 并登录小度智能家居，然后从开发者工具 → Application → Cookies 中复制 `BDUSS` 的值粘贴到下方。",
+        "data": {
+          "cookie": "BDUSS"
+        }
+      },
+      "house": {
+        "title": "选择家庭",
+        "description": "选择要接入的家庭（房屋）。",
+        "data": {
+          "house_id": "家庭"
+        }
+      },
+      "device": {
+        "title": "选择设备",
+        "description": "选择要反向接入 Home Assistant 的小度设备。",
+        "data": {
+          "device_ids": "设备"
+        }
+      }
+    },
+    "error": {
+      "login_failed": "登录失败，请检查账号密码。",
+      "login_blocked": "百度风控拦截了本次登录，请稍后重试，或改用 Cookie 登录。",
+      "captcha_required": "本次登录需要图形验证码，请稍后重试，或先在浏览器登录小度网页版再改用 Cookie 登录。",
+      "invalid_auth": "BDUSS 已失效或无效，请重新获取。",
+      "cannot_connect": "无法连接小度服务器，请检查网络后重试。",
+      "unknown": "发生未知错误，请查看日志。",
+      "no_device_selected": "请至少选择一个设备。"
+    },
+    "abort": {
+      "no_house_found": "该账号下没有找到任何家庭。",
+      "no_device_found": "该家庭下没有找到任何设备。",
+      "auth_failed": "登录未完成，无法继续。",
+      "reauth_aborted": "重新认证已取消。",
+      "reauth_successful": "重新认证成功。",
+      "already_configured": "该账号已配置。"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "小度反向接入 选项",
+        "menu_options": {
+          "cookie": "更新 BDUSS Cookie",
+          "relogin": "使用账号密码重新登录",
+          "devices": "重新选择设备",
+          "scan_interval": "修改状态刷新间隔"
+        }
+      },
+      "relogin": {
+        "title": "重新登录",
+        "description": "使用百度账号密码重新登录以刷新凭据。",
+        "data": {
+          "username": "百度账号",
+          "password": "密码",
+          "baiduid": "BAIDUID（可选）"
+        }
+      },
+      "cookie": {
+        "title": "更新 Cookie",
+        "description": "在浏览器打开 {cookie_url} 登录后，复制 `BDUSS` 的值。",
+        "data": {
+          "cookie": "BDUSS"
+        }
+      },
+      "devices": {
+        "title": "重新选择设备",
+        "data": {
+          "device_ids": "设备"
+        }
+      },
+      "scan_interval": {
+        "title": "状态刷新间隔",
+        "description": "小度云端状态轮询间隔（秒），建议不低于 120 秒。",
+        "data": {
+          "scan_interval": "刷新间隔（秒）"
+        }
+      }
+    },
+    "error": {
+      "login_failed": "登录失败，请检查账号密码。",
+      "login_blocked": "百度风控拦截了本次登录，请稍后重试。",
+      "captcha_required": "本次登录需要图形验证码，请稍后重试。",
+      "invalid_auth": "BDUSS 已失效或无效。",
+      "cannot_connect": "无法连接小度服务器。",
+      "unknown": "发生未知错误。",
+      "no_device_selected": "请至少选择一个设备。"
+    },
+    "abort": {
+      "no_device_found": "没有找到任何设备。"
+    }
+  }
+}

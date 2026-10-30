@@ -1,0 +1,14 @@
+{
+  "domain": "xiaodu_reverse",
+  "name": "小度反向接入",
+  "codeowners": [],
+  "config_flow": true,
+  "dependencies": [],
+  "documentation": "https://github.com/",
+  "integration_type": "hub",
+  "iot_class": "cloud_polling",
+  "issue_tracker": "https://github.com/",
+  "loggers": ["custom_components.xiaodu_reverse"],
+  "requirements": ["cryptography>=3.3.2"],
+  "version": "1.0.0"
+}

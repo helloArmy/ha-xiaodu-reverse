@@ -1,0 +1,7 @@
+{
+  "name": "小度反向接入 (XiaoDu Reverse)",
+  "render_readme": true,
+  "domains": ["xiaodu_reverse"],
+  "homeassistant": "2024.6.0",
+  "iot_class": "Cloud Polling"
+}

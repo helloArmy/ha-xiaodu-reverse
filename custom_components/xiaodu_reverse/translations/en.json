@@ -1,0 +1,121 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "XiaoDu Reverse",
+        "description": "Choose how to sign in. Account + password is recommended: the integration can refresh the credential automatically.",
+        "data": {
+          "login_mode": "Login method"
+        }
+      },
+      "login": {
+        "title": "Baidu account login",
+        "description": "Sign in with the Baidu account bound to your XiaoDu app.\n\nProviding BAIDUID is strongly recommended: open {cookie_url} in a browser, log in, then copy the `BAIDUID` cookie value (looks like `XXXX...:FG=1`) from the developer tools. It greatly reduces the chance of an SMS challenge.",
+        "data": {
+          "username": "Baidu account (phone / email / username)",
+          "password": "Password",
+          "baiduid": "BAIDUID (optional, recommended)"
+        }
+      },
+      "sms_verify": {
+        "title": "SMS verification",
+        "description": "Baidu risk control requires SMS verification. {detail}",
+        "data": {
+          "verifycode": "SMS code"
+        }
+      },
+      "cookie": {
+        "title": "Cookie login",
+        "description": "Open {cookie_url} in a browser and sign in to XiaoDu smart home, then copy the `BDUSS` cookie value from Developer Tools → Application → Cookies.",
+        "data": {
+          "cookie": "BDUSS"
+        }
+      },
+      "house": {
+        "title": "Select home",
+        "description": "Select the home to import.",
+        "data": {
+          "house_id": "Home"
+        }
+      },
+      "device": {
+        "title": "Select devices",
+        "description": "Select the XiaoDu appliances to bring into Home Assistant.",
+        "data": {
+          "device_ids": "Devices"
+        }
+      }
+    },
+    "error": {
+      "login_failed": "Login failed — check the account and password.",
+      "login_blocked": "Baidu risk control blocked this login. Try again later, or use cookie login.",
+      "captcha_required": "This login needs an image captcha. Try again later, or sign in to the XiaoDu web page first and use cookie login.",
+      "invalid_auth": "The BDUSS cookie is invalid or expired.",
+      "cannot_connect": "Cannot reach the XiaoDu cloud. Check the network and retry.",
+      "unknown": "Unexpected error — check the logs.",
+      "no_device_selected": "Select at least one device."
+    },
+    "abort": {
+      "no_house_found": "No home was found for this account.",
+      "no_device_found": "No device was found in this home.",
+      "auth_failed": "Login did not complete.",
+      "reauth_aborted": "Re-authentication was cancelled.",
+      "reauth_successful": "Re-authentication successful.",
+      "already_configured": "This account is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "XiaoDu Reverse options",
+        "menu_options": {
+          "cookie": "Update BDUSS cookie",
+          "relogin": "Sign in again with account and password",
+          "devices": "Re-select devices",
+          "scan_interval": "Change polling interval"
+        }
+      },
+      "relogin": {
+        "title": "Sign in again",
+        "description": "Sign in with the Baidu account to refresh the credential.",
+        "data": {
+          "username": "Baidu account",
+          "password": "Password",
+          "baiduid": "BAIDUID (optional)"
+        }
+      },
+      "cookie": {
+        "title": "Update cookie",
+        "description": "Open {cookie_url}, sign in, then copy the `BDUSS` value.",
+        "data": {
+          "cookie": "BDUSS"
+        }
+      },
+      "devices": {
+        "title": "Re-select devices",
+        "data": {
+          "device_ids": "Devices"
+        }
+      },
+      "scan_interval": {
+        "title": "Polling interval",
+        "description": "Cloud status polling interval in seconds. 120 s or more is recommended.",
+        "data": {
+          "scan_interval": "Interval (s)"
+        }
+      }
+    },
+    "error": {
+      "login_failed": "Login failed — check the account and password.",
+      "login_blocked": "Baidu risk control blocked this login.",
+      "captcha_required": "This login needs an image captcha.",
+      "invalid_auth": "The BDUSS cookie is invalid.",
+      "cannot_connect": "Cannot reach the XiaoDu cloud.",
+      "unknown": "Unexpected error.",
+      "no_device_selected": "Select at least one device."
+    },
+    "abort": {
+      "no_device_found": "No device found."
+    }
+  }
+}
