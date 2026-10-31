@@ -73,7 +73,7 @@ class XiaoDuFan(XiaoDuEntity, FanEntity):
     @property
     def percentage(self) -> int | None:
         """Return the fan speed as a percentage."""
-        raw = self.state("fanSpeed")
+        raw = self.attr_value("fanSpeed")
         if raw is None:
             return None
         try:
@@ -84,7 +84,7 @@ class XiaoDuFan(XiaoDuEntity, FanEntity):
     @property
     def oscillating(self) -> bool | None:
         """Return True when oscillation is on."""
-        value = self.state("fanOscillation")
+        value = self.attr_value("fanOscillation")
         if value is None:
             return None
         return str(value).strip().lower() == "on"

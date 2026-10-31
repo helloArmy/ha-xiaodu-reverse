@@ -103,7 +103,7 @@ class XiaoDuLight(XiaoDuEntity, LightEntity):
     @property
     def brightness(self) -> int | None:
         """Return brightness as 0-255."""
-        raw = self.state("brightness")
+        raw = self.attr_value("brightness")
         if raw is None:
             return None
         try:
@@ -137,7 +137,7 @@ class XiaoDuLight(XiaoDuEntity, LightEntity):
     @property
     def color_temp_kelvin(self) -> int | None:
         """Return the current color temperature in kelvin."""
-        raw = self.state("colorTemperatureInKelvin")
+        raw = self.attr_value("colorTemperatureInKelvin")
         if raw is None:
             return None
         low, high = self._kelvin_range()
@@ -167,7 +167,7 @@ class XiaoDuLight(XiaoDuEntity, LightEntity):
         mapping = self._effect_map()
         if not mapping:
             return None
-        current = self.state("mode")
+        current = self.attr_value("mode")
         return mapping.get(str(current))
 
     # ── commands ───────────────────────────────────────────────────────

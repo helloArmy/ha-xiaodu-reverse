@@ -91,10 +91,10 @@ class XiaoDuVacuum(XiaoDuEntity, StateVacuumEntity):
     def _raw_state(self) -> str | None:
         """Return the raw cleaning state string."""
         for key in STATE_KEYS:
-            value = self.state(key)
+            value = self.attr_value(key)
             if value is not None:
                 return str(value).strip().upper()
-        on_off = self.state("turnOnState")
+        on_off = self.attr_value("turnOnState")
         if on_off is not None:
             return "CLEANING" if str(on_off).strip().lower() == "on" else "DOCKED"
         return None
@@ -110,7 +110,7 @@ class XiaoDuVacuum(XiaoDuEntity, StateVacuumEntity):
     @property
     def battery_level(self) -> int | None:
         """Return the battery percentage."""
-        value = self.state("battery")
+        value = self.attr_value("battery")
         try:
             return max(0, min(100, int(float(value)))) if value is not None else None
         except (TypeError, ValueError):

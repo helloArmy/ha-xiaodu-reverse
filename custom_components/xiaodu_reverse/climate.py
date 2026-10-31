@@ -161,13 +161,13 @@ class XiaoDuClimate(XiaoDuEntity, ClimateEntity):
         """Return the current HVAC mode."""
         if not self._is_on:
             return HVACMode.OFF
-        code = str(self.state("mode") or "").upper()
+        code = str(self.attr_value("mode") or "").upper()
         return XIAODU_TO_HVAC.get(code, HVACMode.AUTO)
 
     @property
     def _is_on(self) -> bool:
         """Return True when the AC reports ON."""
-        value = self.state("turnOnState")
+        value = self.attr_value("turnOnState")
         return str(value).strip().lower() == "on"
 
     @property
@@ -189,7 +189,7 @@ class XiaoDuClimate(XiaoDuEntity, ClimateEntity):
     @property
     def current_temperature(self) -> float | None:
         """Return the measured room temperature."""
-        value = self.state("temperature") or self.state("currentTemperature")
+        value = self.attr_value("temperature") or self.attr_value("currentTemperature")
         try:
             return float(value) if value is not None else None
         except (TypeError, ValueError):
@@ -198,7 +198,7 @@ class XiaoDuClimate(XiaoDuEntity, ClimateEntity):
     @property
     def target_temperature(self) -> float | None:
         """Return the target temperature."""
-        value = self.state("targetTemperature") or self.state("temperatureSet")
+        value = self.attr_value("targetTemperature") or self.attr_value("temperatureSet")
         try:
             return float(value) if value is not None else None
         except (TypeError, ValueError):
@@ -209,7 +209,7 @@ class XiaoDuClimate(XiaoDuEntity, ClimateEntity):
         """Return the current fan speed label."""
         entry = self.state_setting.get("fanSpeed") or {}
         codes = entry.get("valueRangeMap") or {}
-        current = self.state("fanSpeed")
+        current = self.attr_value("fanSpeed")
         if isinstance(codes, dict):
             return str(codes.get(str(current), current)) if current is not None else None
         return str(current) if current is not None else None
@@ -219,8 +219,8 @@ class XiaoDuClimate(XiaoDuEntity, ClimateEntity):
         """Expose a few raw device fields for troubleshooting."""
         return {
             "appliance_id": self._appliance_id,
-            "raw_mode": self.state("mode"),
-            "raw_fan_speed": self.state("fanSpeed"),
+            "raw_mode": self.attr_value("mode"),
+            "raw_fan_speed": self.attr_value("fanSpeed"),
         }
 
     # ── commands ───────────────────────────────────────────────────────

@@ -57,7 +57,7 @@ class XiaoDuLock(XiaoDuEntity, LockEntity):
     def is_locked(self) -> bool | None:
         """Return True when the lock reports locked."""
         for key in LOCK_KEYS:
-            value = self.state(key)
+            value = self.attr_value(key)
             if value is None:
                 continue
             text = str(value).strip().lower()

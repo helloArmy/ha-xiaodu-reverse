@@ -125,7 +125,7 @@ class XiaoDuSensor(XiaoDuEntity, SensorEntity):
     @property
     def native_value(self) -> Any:
         """Return the current attribute value."""
-        value = self.state(self._key)
+        value = self.attr_value(self._key)
         if value is None:
             return None
         if isinstance(value, (int, float, bool)):

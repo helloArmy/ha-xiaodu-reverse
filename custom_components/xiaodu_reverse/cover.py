@@ -86,7 +86,7 @@ class XiaoDuCover(XiaoDuEntity, CoverEntity):
         key = self._position_key()
         if key is None:
             return None
-        raw = self.state(key)
+        raw = self.attr_value(key)
         try:
             return max(0, min(100, int(float(raw))))
         except (TypeError, ValueError):
@@ -99,7 +99,7 @@ class XiaoDuCover(XiaoDuEntity, CoverEntity):
         if position is not None:
             return position == 0
         # Fall back to the on/off state: ON means opened.
-        on = self.state("turnOnState")
+        on = self.attr_value("turnOnState")
         if on is None:
             return None
         return str(on).strip().lower() not in ("on", "open", "opened")

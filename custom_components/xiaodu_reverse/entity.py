@@ -111,13 +111,19 @@ class XiaoDuEntity(CoordinatorEntity[XiaoDuCoordinator]):
         return bool(self.appliance) and super().available
 
     # ── state helpers ──────────────────────────────────────────────────
+    #
+    # IMPORTANT: these must NOT be named ``state`` / ``is_on``. Every platform
+    # class already exposes ``Entity.state`` (a property returning the entity
+    # state string) and e.g. ``SwitchEntity.is_on``. Shadowing them with
+    # methods makes ``str(self.state)`` return a bound method whose repr
+    # touches the entity again, producing infinite __repr__ recursion.
 
-    def state(self, key: str, default: Any = None) -> Any:
+    def attr_value(self, key: str, default: Any = None) -> Any:
         """Read one ``stateSetting`` value."""
         value = state_value(self.state_setting, key)
         return default if value is None else value
 
-    def is_on(self, key: str = "turnOnState") -> bool:
+    def attr_is_on(self, key: str = "turnOnState") -> bool:
         """Read an on/off attribute."""
         return state_is_on(self.state_setting, key)
 
