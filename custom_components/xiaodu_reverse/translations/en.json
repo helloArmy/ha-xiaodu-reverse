@@ -3,18 +3,18 @@
     "step": {
       "user": {
         "title": "XiaoDu Reverse",
-        "description": "Choose how to sign in. Account + password is recommended: the integration can refresh the credential automatically.",
+        "description": "Choose the login method.\n\nThe default \"Baidu account password\" is all you need — just submit. BAIDUID and BDUSS are fetched automatically.",
         "data": {
           "login_mode": "Login method"
         }
       },
       "login": {
         "title": "Baidu account login",
-        "description": "Sign in with the Baidu account bound to the XiaoDu app.\n\nBAIDUID can be left empty; the integration fetches it automatically.\n\nIf Baidu asks for SMS verification, the next step offers \"Send code\" and a code field.",
+        "description": "Sign in with the Baidu account bound to the XiaoDu app.\n\nOnly the account and password are needed; BAIDUID is fetched automatically.\n\nIf Baidu asks for SMS verification, two steps follow: \"Send code\" and \"Enter code\".",
         "data": {
           "username": "Baidu account (phone / email / username)",
           "password": "Password",
-          "baiduid": "BAIDUID (optional, auto-fetched)"
+          "baiduid": "BAIDUID (leave empty)"
         }
       },
       "cookie": {
@@ -91,7 +91,7 @@
         "data": {
           "username": "Baidu account",
           "password": "Password",
-          "baiduid": "BAIDUID (optional, auto-fetched)"
+          "baiduid": "BAIDUID (leave empty)"
         }
       },
       "cookie": {

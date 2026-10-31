@@ -3,18 +3,18 @@
     "step": {
       "user": {
         "title": "小度反向接入",
-        "description": "选择登录方式。推荐使用百度账号密码登录，集成可在凭据失效时自动续期。",
+        "description": "选择登录方式。\n\n默认「百度账号密码登录」——直接点提交即可，BAIDUID 与 BDUSS 都由集成自动获取，无需打开开发者工具。",
         "data": {
           "login_mode": "登录方式"
         }
       },
       "login": {
         "title": "百度账号登录",
-        "description": "使用小度 App 绑定的百度账号登录。\n\nBAIDUID 可留空，集成会自动向百度获取。\n\n若百度要求短信验证，下一步会出现「发送验证码」与验证码输入框。",
+        "description": "使用小度 App 绑定的百度账号登录。\n\n只需账号与密码；BAIDUID 由集成自动获取，无需填写。\n\n提交后若百度要求短信验证，会依次出现「发送验证码」和「输入验证码」两步。",
         "data": {
           "username": "百度账号（手机号/邮箱/用户名）",
           "password": "密码",
-          "baiduid": "BAIDUID（可选，留空自动获取）"
+          "baiduid": "BAIDUID（留空即可，无需填写）"
         }
       },
       "cookie": {
@@ -91,7 +91,7 @@
         "data": {
           "username": "百度账号",
           "password": "密码",
-          "baiduid": "BAIDUID（可选，留空自动获取）"
+          "baiduid": "BAIDUID（留空即可，无需填写）"
         }
       },
       "cookie": {
