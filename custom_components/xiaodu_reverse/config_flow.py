@@ -84,7 +84,11 @@ def _build_sms_placeholders(
     if stage == "code":
         hint = f"验证码已发送至{who}，填入后点提交完成登录。"
     elif not sent_at:
-        hint = "点击下方提交按钮，向百度请求发送短信验证码。"
+        hint = (
+            f"验证码将发送至{mobile}。点击下方提交按钮发送。"
+            if mobile
+            else "点击下方提交按钮，向百度请求发送短信验证码。"
+        )
     elif wait > 0:
         hint = f"验证码已发送至{who}，{wait} 秒后可重新发送。"
     else:
