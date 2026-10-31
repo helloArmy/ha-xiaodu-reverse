@@ -137,6 +137,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: XiaoDuConfigEntry) -> bo
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     entry.async_on_unload(entry.add_update_listener(async_update_options))
+
+    # 临时：探测 HA 容器能否运行 Chromium（结果写入日志，见 _probe.py）
+    try:
+        from ._probe import async_probe_once
+
+        hass.async_create_task(
+            async_probe_once(hass, session), "xiaodu_reverse_probe"
+        )
+    except Exception as exc:  # noqa: BLE001
+        _LOGGER.warning("XD-PROBE 无法启动探测任务: %s", exc)
+
     return True
 
 
