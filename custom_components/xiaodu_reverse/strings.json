@@ -10,18 +10,11 @@
       },
       "login": {
         "title": "百度账号登录",
-        "description": "使用小度 App 绑定的百度账号登录。\n\nBAIDUID 可留空，集成会自动向百度获取。\n\n若提示「风控二次验证（400023）」，说明百度把本次请求判定为陌生设备（受 IP 与 TLS 指纹影响，与 BAIDUID 无关），请返回上一步改用「直接填写 BDUSS Cookie」登录。",
+        "description": "使用小度 App 绑定的百度账号登录。\n\nBAIDUID 可留空，集成会自动向百度获取。\n\n若百度要求短信验证，下一步会出现「发送验证码」与验证码输入框。",
         "data": {
           "username": "百度账号（手机号/邮箱/用户名）",
           "password": "密码",
           "baiduid": "BAIDUID（可选，留空自动获取）"
-        }
-      },
-      "sms_verify": {
-        "title": "短信验证",
-        "description": "百度风控要求短信验证。{detail}",
-        "data": {
-          "verifycode": "短信验证码"
         }
       },
       "cookie": {
@@ -44,6 +37,14 @@
         "data": {
           "device_ids": "设备"
         }
+      },
+      "sms": {
+        "title": "短信验证",
+        "description": "百度要求短信二次验证。验证码将发送至 {mobile}。\n\n{detail}",
+        "data": {
+          "verifycode": "短信验证码",
+          "action": "操作"
+        }
       }
     },
     "error": {
@@ -54,7 +55,11 @@
       "invalid_auth": "BDUSS 已失效或无效，请重新获取。",
       "cannot_connect": "无法连接小度服务器，请检查网络后重试。",
       "unknown": "发生未知错误，请查看日志。",
-      "no_device_selected": "请至少选择一个设备。"
+      "no_device_selected": "请至少选择一个设备。",
+      "resend_too_soon": "请等待倒计时结束再重新发送验证码。",
+      "code_required": "请输入短信验证码。",
+      "sms_send_failed": "短信验证码发送失败，请稍后重试。",
+      "session_expired": "验证会话已过期，请返回上一步重新登录。"
     },
     "abort": {
       "no_house_found": "该账号下没有找到任何家庭。",
@@ -78,7 +83,7 @@
       },
       "relogin": {
         "title": "重新登录",
-        "description": "使用百度账号密码重新登录以刷新凭据。\n\nBAIDUID 可留空，集成会自动获取。\n\n注意：百度会把服务器发起的登录请求按陌生设备处理，很可能返回风控二次验证（400023）。一旦出现，集成会自动切换到「更新 BDUSS Cookie」步骤，请按那里的指引从浏览器复制 BDUSS。",
+        "description": "使用百度账号密码重新登录以刷新凭据。\n\nBAIDUID 可留空，集成会自动获取。\n\n若百度要求短信验证，下一步会出现「发送验证码」与验证码输入框；验证码 60 秒后可重新发送。",
         "data": {
           "username": "百度账号",
           "password": "密码",
@@ -104,6 +109,14 @@
         "data": {
           "scan_interval": "刷新间隔（秒）"
         }
+      },
+      "sms": {
+        "title": "短信验证",
+        "description": "百度要求短信二次验证。验证码将发送至 {mobile}。\n\n{detail}",
+        "data": {
+          "verifycode": "短信验证码",
+          "action": "操作"
+        }
       }
     },
     "error": {
@@ -113,7 +126,11 @@
       "invalid_auth": "BDUSS 已失效或无效。",
       "cannot_connect": "无法连接小度服务器。",
       "unknown": "发生未知错误。",
-      "no_device_selected": "请至少选择一个设备。"
+      "no_device_selected": "请至少选择一个设备。",
+      "resend_too_soon": "请等待倒计时结束再重新发送验证码。",
+      "code_required": "请输入短信验证码。",
+      "sms_send_failed": "短信验证码发送失败，请稍后重试。",
+      "session_expired": "验证会话已过期，请返回上一步重新登录。"
     },
     "abort": {
       "no_device_found": "没有找到任何设备。"

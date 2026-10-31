@@ -10,18 +10,11 @@
       },
       "login": {
         "title": "Baidu account login",
-        "description": "Sign in with the Baidu account bound to your XiaoDu app.\n\nBAIDUID may be left blank — the integration fetches one from Baidu automatically.\n\nIf you get a risk-control challenge (400023), Baidu has judged this request as an unknown device (driven by IP and TLS fingerprint, not BAIDUID). Go back and use the \"BDUSS cookie\" login instead.",
+        "description": "Sign in with the Baidu account bound to the XiaoDu app.\n\nBAIDUID can be left empty; the integration fetches it automatically.\n\nIf Baidu asks for SMS verification, the next step offers \"Send code\" and a code field.",
         "data": {
           "username": "Baidu account (phone / email / username)",
           "password": "Password",
           "baiduid": "BAIDUID (optional, auto-fetched)"
-        }
-      },
-      "sms_verify": {
-        "title": "SMS verification",
-        "description": "Baidu risk control requires SMS verification. {detail}",
-        "data": {
-          "verifycode": "SMS code"
         }
       },
       "cookie": {
@@ -44,6 +37,14 @@
         "data": {
           "device_ids": "Devices"
         }
+      },
+      "sms": {
+        "title": "SMS verification",
+        "description": "Baidu requires SMS verification. The code is sent to {mobile}.\n\n{detail}",
+        "data": {
+          "verifycode": "SMS code",
+          "action": "Action"
+        }
       }
     },
     "error": {
@@ -54,7 +55,11 @@
       "invalid_auth": "The BDUSS cookie is invalid or expired.",
       "cannot_connect": "Cannot reach the XiaoDu cloud. Check the network and retry.",
       "unknown": "Unexpected error — check the logs.",
-      "no_device_selected": "Select at least one device."
+      "no_device_selected": "Select at least one device.",
+      "resend_too_soon": "Please wait for the countdown before resending the code.",
+      "code_required": "Please enter the SMS code.",
+      "sms_send_failed": "Failed to send the SMS code, please try again later.",
+      "session_expired": "The verification session expired, please go back and sign in again."
     },
     "abort": {
       "no_house_found": "No home was found for this account.",
@@ -78,7 +83,7 @@
       },
       "relogin": {
         "title": "Sign in again",
-        "description": "Sign in with the Baidu account to refresh the credential.\n\nBAIDUID may be left blank — it is fetched automatically.\n\nNote: Baidu treats sign-ins originating from a server as an unknown device and will likely return a risk-control challenge (400023). When that happens the integration switches to the \"Update BDUSS cookie\" step automatically — follow the instructions there.",
+        "description": "Sign in again with the Baidu account to refresh the credentials.\n\nBAIDUID can be left empty.\n\nIf Baidu asks for SMS verification, the next step offers \"Send code\" and a code field; the code can be resent after 60 seconds.",
         "data": {
           "username": "Baidu account",
           "password": "Password",
@@ -104,6 +109,14 @@
         "data": {
           "scan_interval": "Interval (s)"
         }
+      },
+      "sms": {
+        "title": "SMS verification",
+        "description": "Baidu requires SMS verification. The code is sent to {mobile}.\n\n{detail}",
+        "data": {
+          "verifycode": "SMS code",
+          "action": "Action"
+        }
       }
     },
     "error": {
@@ -113,7 +126,11 @@
       "invalid_auth": "The BDUSS cookie is invalid.",
       "cannot_connect": "Cannot reach the XiaoDu cloud.",
       "unknown": "Unexpected error.",
-      "no_device_selected": "Select at least one device."
+      "no_device_selected": "Select at least one device.",
+      "resend_too_soon": "Please wait for the countdown before resending the code.",
+      "code_required": "Please enter the SMS code.",
+      "sms_send_failed": "Failed to send the SMS code, please try again later.",
+      "session_expired": "The verification session expired, please go back and sign in again."
     },
     "abort": {
       "no_device_found": "No device found."

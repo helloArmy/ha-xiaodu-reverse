@@ -67,3 +67,14 @@ ABORT_REAUTH = "reauth_aborted"
 # XieDu exposes multi-function appliances (clothes rack, air cooler, ...)
 # as ``panels``; the "功能控制" panel holds the toggle list.
 PANEL_TITLE_FUNCTIONS = ("功能控制", "功能", "开关", "Function")
+
+# ── SMS verification (config flow) ──────────────────────────────────────
+CONF_ACTION = "action"
+SMS_ACTION_SEND = "send"
+SMS_ACTION_SUBMIT = "submit"
+# 百度侧 60 秒内重复下发会失败，这里做同样的限制
+SMS_RESEND_INTERVAL = 60
+ERROR_RESEND_TOO_SOON = "resend_too_soon"
+ERROR_CODE_REQUIRED = "code_required"
+ERROR_SMS_FAILED = "sms_send_failed"
+ERROR_SESSION_EXPIRED = "session_expired"
