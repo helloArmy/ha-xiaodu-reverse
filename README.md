@@ -209,6 +209,8 @@ custom_components/xiaodu_reverse/
 - **BAIDUID 输入框不再预填** — 标签写着「留空即可」却预填了旧值，容易让人误以为必填
 - **发送验证码前就显示手机号** — 进页面即查询验证方式，显示「验证码将发送至177********」
 
+</details>
+
 <details>
 <summary>v1.3.2（2026-10-31）· 窗帘支持设定百分比</summary>
 
@@ -269,8 +271,6 @@ custom_components/xiaodu_reverse/
 - **修复 HA 2026.10（Python 3.14）兼容** — `VacuumEntityFeature.BATTERY` 已被移除，类体硬引用导致 vacuum 平台 ImportError、整条 setup 失败；改用 `getattr` 容错构造
 - **修复 `__repr__` 无限递归爆栈** — `XiaoDuEntity.state()` 覆盖了 HA 的 `Entity.state` property，`str(self.state)` 得到 bound method，其 repr 又引用实体，触发 `RecursionError: Stack overflow`，所有实体 `Error adding entity` 且恒为 unavailable；改名为 `attr_value()`
 - **窗帘位置字段补充 `degree`** — 小度窗帘实际使用 `degree` 而非 `position`
-
-</details>
 
 </details>
 
