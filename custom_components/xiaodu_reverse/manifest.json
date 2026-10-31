@@ -8,7 +8,11 @@
   "integration_type": "hub",
   "iot_class": "cloud_polling",
   "issue_tracker": "https://github.com/helloArmy/ha-xiaodu-reverse/issues",
-  "loggers": ["custom_components.xiaodu_reverse"],
-  "requirements": ["cryptography>=3.3.2"],
-  "version": "1.0.0"
+  "loggers": [
+    "custom_components.xiaodu_reverse"
+  ],
+  "requirements": [
+    "cryptography>=3.3.2"
+  ],
+  "version": "1.3.1"
 }

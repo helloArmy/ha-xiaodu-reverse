@@ -14,7 +14,7 @@
 
 | 能力 | 来源 | 说明 |
 |---|---|---|
-| **登录方式** | [RockJesus/ha-xiaodu](https://github.com/RockJesus/ha-xiaodu) | 完整的百度 wappass 账号密码登录：RSA 加密 + moonshadV3 风控签名 + 短信验证码 + 凭据自动续期 |
+| **登录方式** | [RockJesus/ha-xiaodu](https://github.com/RockJesus/ha-xiaodu) | 完整的百度账号密码登录：RSA 加密 + moonshadV3 风控签名 + 短信验证码 + 凭据自动续期。该参考项目走的是移动端 `wappass` 接口，本项目改用 PC 端真实接口 `passport.baidu.com/v2/api/?login` |
 | **控制方式** | [2331892928/hass_xiaodu](https://github.com/2331892928/hass_xiaodu) | 小度云 `directivesend` 指令通道，以及 **panels 面板驱动**的多功能设备拆分（晾衣架、空调扇等），可原样透传厂商 payload |
 
 两者底层是同一套小度云 API（`DuerOS.ConnectedHome.Control`），差异主要在指令覆盖度与面板能力，本项目做了合并：
@@ -25,8 +25,8 @@
 
 ## 功能
 
-- **两种登录**：百度账号密码（推荐，可自动续期）／直接粘贴 BDUSS Cookie
-- **短信验证**：命中百度风控（400023）时自动下发验证码并引导输入
+- **两种登录**：百度账号密码（推荐，短信验证后可自动换取 BDUSS）／直接粘贴 BDUSS Cookie
+- **短信验证**：百度要求二次验证时，点「发送验证码」→ 填 6 位码 → 自动换取 BDUSS，60 秒内不可重发
 - **多家庭 / 多设备**：选择家庭后多选要接入的设备
 - **全平台实体**：`light` `switch` `cover` `climate` `fan` `lock` `button` `sensor` `vacuum`
 - **面板拆分**：一台多功能设备按 `panels.功能控制` 拆成多个开关实体，每个功能独立可控、独立回读状态
@@ -55,15 +55,18 @@
 ## 配置
 
 1. **设置 → 设备与服务 → 添加集成 → 搜索「小度反向接入」**
-2. 选择登录方式：
-   - **账号密码**：填小度 App 绑定的百度账号与密码
-   - 建议同时填 **BAIDUID**：浏览器打开 <https://xiaodu.baidu.com/saiya/smarthome/index.html> 登录后，从开发者工具 → Application → Cookies 复制 `BAIDUID`（形如 `XXXX...:FG=1`）。**填了能显著降低被风控要求短信验证的概率**
-3. 如提示短信验证，输入收到的验证码
+2. 选择「百度账号密码登录」，填小度 App 绑定的百度账号与密码。**BAIDUID 可留空**，集成会自动获取
+3. 提交后若百度要求短信验证，会连续出现两步：
+   - **发送验证码**：点提交即向百度请求下发，60 秒后可重发
+   - **输入验证码**：填入收到的 6 位码并提交，完成后自动换取 BDUSS
 4. 选择家庭 → 多选设备 → 完成
 
 ### 关于 BDUSS Cookie
 
-只有账号密码登录被风控死锁时才需要：
+账号密码登录已经可以自动换取 BDUSS，正常情况下用不到它。以下情况才建议手动粘贴：
+
+- 该账号收不到短信验证码（未绑定手机等）
+- 想跳过验证步骤，直接用浏览器里已有的登录态
 
 1. 浏览器打开 <https://xiaodu.baidu.com/saiya/smarthome/index.html> 并登录
 2. 开发者工具 → Application → Cookies → 找到 `BDUSS`，复制其值
@@ -101,13 +104,19 @@ Cookie 有效期通常数月，失效后集成会提示重新认证。
 ## 工作原理
 
 ```
-HA 集成  ──登录──▶  wappass.baidu.com     （账号密码 → BDUSS）
-         ──轮询──▶  /saiya/smarthome/appliance          设备列表
+HA 集成  ──账密登录──▶  passport.baidu.com/v2/api/?login        45 参数 + dv 设备指纹
+         ──二次验证──▶  passport.baidu.com/v3/api/auth/widget    action=get / send / check
+         ──换取凭据──▶  passport.baidu.com/v2/?loginproxy&apiver=v3&tt=…   → BDUSS
+         ──轮询────▶  /saiya/smarthome/appliance          设备列表
                     /saiya/smarthome/appliancedetails   单设备详情 + stateSetting + panels
          ──控制──▶  /saiya/smarthome/directivesend      DuerOS.ConnectedHome.Control 指令
 ```
 
-所有请求都带 `Cookie: BDUSS=<值>;BDUSS_BFESS=<值>` 与 `HOUSE_ID` Cookie。
+登录链路有一个容易踩的坑：**百度在 120021 响应里会下发会话 cookie（`UBI`、`logTraceID`、`pplogid`）**，
+只有把它们完整带回去，验证控件才认这个会话。任何手写的 `Cookie:` 头都会覆盖整个 cookie jar，
+导致后续请求恒被拒（`400021` / `810010` / `110001`）。
+
+设备请求都带 `Cookie: BDUSS=<值>;BDUSS_BFESS=<值>` 与 `HOUSE_ID` Cookie。
 
 状态读取统一走 `appliance.stateSetting.<属性>.value`；面板开关的「开」判定为
 `stateSetting[switchType].value == typeValue`。
@@ -120,7 +129,7 @@ HA 集成  ──登录──▶  wappass.baidu.com     （账号密码 → BDUS
 - **空调关机时拒绝调节**：多数小度空调在关机状态会拒绝温度与风速指令（`控制失败，请检查该设备的电源和网络是否正常`），请先开机
 - **室温不可读**：部分空调设备的 `stateSetting` 里没有 `temperature` 字段，`current_temperature` 会一直是空值，这是设备不上报
 - **不支持的设备**：某些厂商设备的小度技能是「只读」的，会出现实体但控制被云端拒绝（日志有 `控制失败 (xxx)` 提示）
-- **风险控制**：新设备上使用账号密码登录，百度可能要求二次验证（`400023`）。若该账号拿不到短信验证入口，请改用 BDUSS Cookie 登录——此时无法自动续期
+- **风控验证**：账号密码登录时百度通常要求短信二次验证（`120021`）。验证通过后可自动换取 BDUSS；若该账号收不到短信，仍可改用 BDUSS Cookie 手动更新
 
 ## 实测验证
 
@@ -129,7 +138,8 @@ HA 集成  ──登录──▶  wappass.baidu.com     （账号密码 → BDUS
 | 能力 | 状态 |
 |---|---|
 | BDUSS Cookie 登录 | 可用 |
-| 账号密码登录 | 部分：取决于百度风控，新设备可能触发 400023 |
+| 账号密码登录 | 可用（2026-10-31 实机跑通） |
+| 短信验证 → 自动换取 BDUSS | 可用（登录 → 发码 → 填码 → BDUSS，无需浏览器） |
 | 设备发现 / 实体生成 | 可用 |
 | 批量状态轮询 | 可用 |
 | 空调：开关 / 模式 / 调温 | 可用 |
@@ -144,7 +154,8 @@ HA 集成  ──登录──▶  wappass.baidu.com     （账号密码 → BDUS
 custom_components/xiaodu_reverse/
 ├── __init__.py          入口：建 session / API / 协调器，转发平台
 ├── const.py             常量与端点
-├── login.py             百度 wappass 登录（来自 ha-xiaodu）
+├── login.py             登录签名（moonshadV3 / RSA / 请求构造）
+├── relogin.py           BDUSS 自动续期：账密登录 → 短信验证 → loginproxy 换票
 ├── api.py               小度云控制 API（来自 hass_xiaodu）
 ├── coordinator.py       批量轮询 + 凭据自动续期
 ├── entity.py            实体基类与运行时取用
@@ -160,10 +171,22 @@ custom_components/xiaodu_reverse/
 
 完整说明见 [Releases](https://github.com/helloArmy/ha-xiaodu-reverse/releases)。
 
-### v1.2.1（2026-10-31）
+### v1.3.1（2026-10-31）
+
+- **账号密码登录全链路打通** — 现在整条登录都可以在服务端完成：账密登录 → 短信验证 → 换取 BDUSS。不需要浏览器，也不引入任何新增依赖。三个关键修复：
+  - **会话 cookie 被自己顶掉**（决定性）：请求头里手写 `Cookie: BAIDUID=…` 会覆盖整个 cookie jar，把百度在 `120021` 时下发的 `UBI` / `logTraceID` / `pplogid` 全部丢掉，验证控件因此恒返回 `400021` / `810010` / `110001`。改为把 BAIDUID 注入 jar 后，`get` 当次即返回 `110000`
+  - **`loginproxy` 是双层 URL 编码**：只解一层会得到 `%3Floginproxy%26…` 并 302 到 `error.html`，改为循环解码直到出现 `?loginproxy`
+  - **签名耗时与设备指纹**：`elapsed` 改为 moonshad 签名循环的真实毫秒耗时（原来硬编码 `6`）；`rinfo` 在没有真实设备指纹时不再伪造（原来是随机 UUID 的 md5）
+- **短信验证拆成两步** — 「发送验证码」与「输入验证码」分开，发码后 60 秒内不可重发；验证方式查询会显示真实脱敏手机号（如 `177********`）
+- **移除浏览器方案** — 删除探测用的 Chromium 相关模块。`dv` 设备指纹与官方 `g.min.js` 输出逐字节一致（解码回环 2/2 通过）
+
+<details>
+<summary>v1.2.1（2026-10-31）· README 与 manifest 修正</summary>
 
 - **README 补全版本记录** — 新增「更新日志」与「实测验证」章节，逐版本记录变更与实机诊断结论，顶部增加 Release / HACS / HA 版本徽章
 - **修正 manifest 链接** — `documentation` 与 `issue_tracker` 从占位地址 `https://github.com/` 改为真实仓库链接，此前 HACS 页面上这两个链接是坏的
+
+</details>
 
 <details>
 <summary>v1.2.0（2026-10-31）· 窗帘控制与延迟刷新</summary>
