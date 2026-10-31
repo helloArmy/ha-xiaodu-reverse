@@ -184,7 +184,18 @@ custom_components/xiaodu_reverse/
 
 > 只有最新版本保持展开，每发一个新版本就把上一版折叠起来。
 
-### v1.3.2（2026-10-31）· 窗帘支持设定百分比
+### v1.3.3（2026-10-31）· 修复验证控件 810010 / 110001
+
+- **登录终于稳定了** — 现象是输完账号密码后，验证方式查询恒返回 `810010（系统繁忙）`、`data` 为空，发码则返回 `110001（参数错误）`。用 Chrome DevTools 在真实浏览器里跑一遍登录、逐字段对比请求后定位到三个原因：
+  - **缺 `ppfuid` cookie**（浏览器侧生成的 32 位设备指纹 uid）。没有它，验证控件直接判「繁忙」。真实浏览器请求头里一直带着，我们从未发送过。补齐后 `code` 立刻从 `810010` 变成 `110000`，并带出脱敏手机号
+  - **验证控件请求体少了 4 个字段**：`tpl` 应为 `pp`（不是 `mn`）、需要 `lang=zh_CN`、`staticPage=…/v3Jump.html`、`charset=UTF-8`，`authParams` 还要带 `nfczid`。少任何一个都会被拒
+  - **响应不是 JSON 而是跳转页**：带上 `staticPage` 后服务端返回的是 `v3Jump.html` 的 HTML，里面用 `?code=…&data=<URL编码JSON>` 携带结果。新增解析器处理这种格式
+- **不再预先调 `fetch_baiduid()`** — 留空交给客户端内部获取。内部那次首页请求会顺带带回 `BIDUPSID` / `PSTM` / `BD_HOME` / `BDSVRTM`，而 `fetch_baiduid()` 因为请求头不同拿不到，这几个 cookie 缺失同样会触发 `810010`
+- **BAIDUID 输入框不再预填** — 标签写着「留空即可」却预填了旧值，容易让人误以为必填
+- **发送验证码前就显示手机号** — 进页面即查询验证方式，显示「验证码将发送至177********」
+
+<details>
+<summary>v1.3.2（2026-10-31）· 窗帘支持设定百分比</summary>
 
 - **窗帘 / 纱窗支持设定开合百分比** — HA 里现在有位置滑块，`cover.set_cover_position` 可用。关键是找对了指令名：`TurnOnPercentRequest`（`SetPositionRequest`/`SetDegreeRequest`/`SetPercentageRequest` 全被云端 `21098 header name is not vaild` 拒绝）。做法是打开小度 App 的窗帘详情页（本质是网页版 `xiaodu.baidu.com/saiya/smarthome`），通过 WebView 调试通道拖动窗帘图标，抓到真实请求：
   ```json
@@ -195,6 +206,8 @@ custom_components/xiaodu_reverse/
   注意 `degree` 要同时出现在 `parameters.attributeValue` 和 `payload.degree`，且都是**字符串**；`degree` 属于可调属性，传裸值而不是 `{"value": 45}`
 - **到位延迟按实测调整** — 补刷新从 8/20/35 秒改为 10/25/45 秒。实测 70% → 0% 往返接近 40 秒，原来的时间点会漏掉最终状态
 - **验证码页显示真实手机号** — 进入「发送验证码」时若还没取到手机号，会再查一次验证方式接口；失败也不再静默，日志里会写明原因
+
+</details>
 
 <details>
 <summary>v1.3.1（2026-10-31）· 账号密码登录全链路打通</summary>

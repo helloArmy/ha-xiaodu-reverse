@@ -285,6 +285,49 @@ def _strip_jsonp(text: str) -> dict[str, Any]:
         raise ReloginError(f"百度返回了非 JSON 内容：{body[:120]}") from exc
 
 
+
+def _parse_widget_response(text: str) -> dict[str, Any]:
+    """解析验证控件的响应。
+
+    带上 ``staticPage`` 参数后，百度不再返回裸 JSON，而是返回一个
+    ``v3Jump.html`` 跳转页：
+
+        <script>document.location.replace(decodeURIComponent("…/v3Jump.html")
+                + "?code=110000&callback=parent.bd__pcbs_xxx&data=%7B…%7D&message=")
+        </script>
+
+    浏览器的 iframe 会执行它并把 ``data`` 回调给父页面。这里手动取出
+    ``code`` 与 ``data``（data 是 URL 编码的 JSON），并整理成与裸 JSON
+    响应一致的结构：``{"code": …, "data": {…}}``。
+    """
+    body = text.strip()
+    if not body.startswith("<"):
+        return _strip_jsonp(body)
+
+    match = re.search(
+        r"\?code=([^&\"']+)&callback=([^&\"']*)&data=([^&\"']+)", body
+    )
+    if not match:
+        # 有的分支只带 code/message，没有 data
+        only = re.search(r"[?&]code=([^&\"']+)", body)
+        if only:
+            return {"code": only.group(1), "data": {}, "message": ""}
+        raise ReloginError(f"无法解析验证控件返回的跳转页：{body[:160]}")
+
+    code, callback, raw_data = match.group(1), match.group(2), match.group(3)
+    try:
+        data = json.loads(unquote(raw_data))
+    except Exception as exc:  # noqa: BLE001
+        raise ReloginError(
+            f"跳转页里的 data 不是合法 JSON：{unquote(raw_data)[:160]}"
+        ) from exc
+    message = ""
+    msg_match = re.search(r"&message=([^&\"']*)", body)
+    if msg_match:
+        message = unquote(msg_match.group(1))
+    return {"code": code, "callback": callback, "message": message, "data": data}
+
+
 def _pick_bduss(set_cookie: list[str]) -> str:
     """从 Set-Cookie 列表里挑出 BDUSS（同名取最后一次）。"""
     value = ""
@@ -341,12 +384,19 @@ class BaiduRelogin:
         password: str,
         *,
         baiduid: str = "",
+        ppfuid: str = "",
     ) -> None:
         """Initialize the relogin client."""
         self.session = session
         self.username = username
         self.password = password
         self.baiduid = baiduid
+        # ppfuid 是浏览器侧生成的设备指纹 uid（32 位 hex）。缺少它时
+        # 验证控件会返回 810010（系统繁忙）/ 110001，且 methodsInfo 为空，
+        # 因此拿不到脱敏手机号、也无法发码。真实浏览器请求头里一直带着它。
+        self.ppfuid = ppfuid or hashlib.md5(
+            f"{username}:{baiduid}".encode()
+        ).hexdigest()
         self.authid = ""
         self.authsid = ""
         self._login_response = ""
@@ -383,15 +433,20 @@ class BaiduRelogin:
         （UBI / logTraceID / pplogid 等）全部顶掉，导致验证控件认为
         "状态不在线"（400021 / 810010）。
         """
-        if not self.baiduid:
+        cookies: dict[str, str] = {}
+        if self.baiduid:
+            cookies["BAIDUID"] = self.baiduid
+        if self.ppfuid:
+            cookies["ppfuid"] = self.ppfuid
+        if not cookies:
             return
         try:
             self.session.cookie_jar.update_cookies(
-                {"BAIDUID": self.baiduid},
+                cookies,
                 response_url=aiohttp.client.URL("https://passport.baidu.com/"),
             )
         except Exception as exc:  # noqa: BLE001
-            _LOGGER.debug("注入 BAIDUID 失败: %s", exc)
+            _LOGGER.debug("注入 BAIDUID/ppfuid 失败: %s", exc)
 
     def _headers(self, *, referer: str = _LOGIN_REFERER) -> dict[str, str]:
         """公共请求头（不带 Cookie，交给 jar 自动处理）。"""
@@ -553,19 +608,31 @@ class BaiduRelogin:
           （多带会被判 110001）
         - ``send`` / ``check`` 才带从 defaultMethodInfo 取得的 authField/authType
         """
+        # 字段顺序与取值照抄真实浏览器（Chrome 156）发出的请求：
+        #   tpl=pp（不是 mn）、lang=zh_CN、
+        #   staticPage=v3Jump.html、charset=UTF-8、authParams 带 nfczid
+        # 少任何一个都会被判 110001 / 810010。
         payload = {
-            "tpl": "mn",
+            "tpl": "pp",
             "client": "",
             "clientfrom": "pc",
             "authid": self.authid,
-            # get 也带 authField/authType —— 与 10:02 前实测成功的写法一致
-            "authField": self.auth_field,
-            "authType": self.auth_type,
             "action": action,
             "authScene": "login_force_verify",
-            "callback": "parent.bd__pcbs__abc",
-            "authParams": json.dumps(auth_params, separators=(",", ":")),
+            "callback": "parent.bd__pcbs_abcd12",
+            "authParams": json.dumps(
+                {**auth_params, "nfczid": ""}, separators=(",", ":")
+            ),
+            "lang": "zh_CN",
+            "staticPage": (
+                "https://passport.baidu.com/static/passpc-account/html/v3Jump.html"
+            ),
+            "charset": "UTF-8",
         }
+        # 只有 send / check 带 authField、authType（浏览器里 get 不带）
+        if action != "get":
+            payload["authField"] = self.auth_field
+            payload["authType"] = self.auth_type
         if action == "send":
             payload["sup624"] = "1"
         headers = self._headers()
@@ -575,12 +642,13 @@ class BaiduRelogin:
         ) as resp:
             text = await resp.text()
         _LOGGER.debug("widget %s 返回: %s", action, text[:200])
-        return _strip_jsonp(text)
+        return _parse_widget_response(text)
 
     async def _widget_json(self, action: str, **auth_params: Any) -> dict[str, Any]:
         """按 JSON body 提交（check 用这个，authParams 必须是对象）。"""
+        # 与 form 版保持一致：tpl=pp、lang、staticPage、charset、nfczid
         payload = {
-            "tpl": "mn",
+            "tpl": "pp",
             "client": "",
             "clientfrom": "pc",
             "authid": self.authid,
@@ -588,7 +656,12 @@ class BaiduRelogin:
             "authType": self.auth_type,
             "action": action,
             "authScene": "login_force_verify",
-            "authParams": auth_params,
+            "authParams": {"nfczid": "", **auth_params},
+            "lang": "zh_CN",
+            "staticPage": (
+                "https://passport.baidu.com/static/passpc-account/html/v3Jump.html"
+            ),
+            "charset": "UTF-8",
         }
         headers = self._headers()
         headers["Content-Type"] = "application/json"
@@ -597,7 +670,7 @@ class BaiduRelogin:
         ) as resp:
             text = await resp.text()
         _LOGGER.debug("widget %s 返回: %s", action, text[:200])
-        return _strip_jsonp(text)
+        return _parse_widget_response(text)
 
     def _parse_methods(self, result: dict[str, Any]) -> None:
         """从验证方式响应里解析 authField/authType 与脱敏手机号。"""
@@ -657,11 +730,18 @@ class BaiduRelogin:
             result = await once()
             self._parse_methods(result)
         if not self.mobile:
-            # 用 warning 级别，确保拿不到号码时能从日志看到接口原始返回
+            # 诊断：一并打印实际的 cookie jar 与关键请求头，
+            # 用来和独立脚本（同样请求可成功）逐项比对
+            try:
+                jar = sorted({f"{c.key}@{c['domain']}" for c in self.session.cookie_jar})
+            except Exception as exc:  # noqa: BLE001
+                jar = [f"<读取失败 {type(exc).__name__}>"]
             _LOGGER.warning(
-                "验证方式响应里没有手机号 (code=%s): %s",
+                "验证方式查询失败 code=%s data=%s | authid_len=%s | jar=%s",
                 result.get("code"),
-                json.dumps(result.get("data") or {}, ensure_ascii=False)[:600],
+                json.dumps(result.get("data") or {}, ensure_ascii=False)[:200],
+                len(self.authid),
+                jar,
             )
         return result
 

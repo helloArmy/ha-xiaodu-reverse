@@ -33,6 +33,7 @@ from .const import (
     CONF_HOUSE_ID,
     CONF_HOUSE_NAME,
     CONF_LOGIN_MODE,
+    CONF_PPFUID,
     CONF_PASSWORD,
     CONF_SCAN_INTERVAL,
     CONF_USERNAME,
@@ -55,7 +56,6 @@ from .const import (
     NAME,
     SMS_RESEND_INTERVAL,
 )
-from .login import fetch_baiduid
 from .relogin import BaiduRelogin, ReloginError, ReloginNeedsCode, ReloginRejected
 
 _LOGGER = logging.getLogger(__name__)
@@ -200,10 +200,10 @@ class XiaoDuReverseConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 errors["base"] = ERROR_LOGIN_FAILED
             else:
                 session = self._get_session()
-                if not baiduid:
-                    # Baidu issues BAIDUID on any baidu.com response, so there
-                    # is no reason to make the user copy it from devtools.
-                    baiduid = await fetch_baiduid(session)
+                # 留空交给 BaiduRelogin 内部获取：内部走的是一次精简的
+                # baidu.com 首页请求，会连带拿到 BIDUPSID/PSTM/BD_HOME/BDSVRTM
+                # 这些 cookie；而 fetch_baiduid() 的请求头不同，拿不到它们，
+                # 导致验证控件判 810010（系统繁忙）。
                 self._pending_baiduid = baiduid
 
                 client = BaiduRelogin(session, username, password, baiduid=baiduid)
@@ -268,7 +268,7 @@ class XiaoDuReverseConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         client = self._relogin
 
         if client is not None and not self._mobile_tried:
-            # 进页面就查一次，让用户在发送之前看到号码。
+            # 进页面就查一次，用户在发送验证码之前就能看到号码。
             # 每个流程只查一次，发送失败重渲染时不再重复请求。
             self._mobile_tried = True
             try:
@@ -277,8 +277,6 @@ class XiaoDuReverseConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     self._mobile = client.mobile
             except Exception as exc:  # noqa: BLE001
                 _LOGGER.warning("查询验证方式失败（不影响发码）: %s", exc)
-            if not self._mobile:
-                _LOGGER.warning("未能取得脱敏手机号，验证方式接口未返回 mobile 字段")
 
         if client is None:
             errors["base"] = ERROR_SESSION_EXPIRED
@@ -634,6 +632,9 @@ class XiaoDuReverseOptionsFlow(config_entries.OptionsFlow):
         new_data[CONF_PASSWORD] = password
         new_data[CONF_BAIDUID] = baiduid
         new_data[CONF_LOGIN_MODE] = LOGIN_MODE_PASSWORD
+        ppfuid = getattr(self._relogin, "ppfuid", "") if self._relogin else ""
+        if ppfuid:
+            new_data[CONF_PPFUID] = ppfuid
         self.hass.config_entries.async_update_entry(self.config_entry, data=new_data)
         self._drop_session()
         await self.hass.config_entries.async_reload(self.config_entry.entry_id)
@@ -653,11 +654,16 @@ class XiaoDuReverseOptionsFlow(config_entries.OptionsFlow):
             self._pending_password = password
 
             session = self._get_session()
-            if not baiduid:
-                baiduid = await fetch_baiduid(session)
+            # 同 ConfigFlow：不预先 fetch，交给客户端内部取（cookie 更完整）
             self._pending_baiduid = baiduid
 
-            client = BaiduRelogin(session, username, password, baiduid=baiduid)
+            client = BaiduRelogin(
+                session,
+                username,
+                password,
+                baiduid=baiduid,
+                ppfuid=str(self.config_entry.data.get(CONF_PPFUID) or ""),
+            )
             try:
                 bduss = await client.async_begin()
             except ReloginRejected as exc:
@@ -672,7 +678,7 @@ class XiaoDuReverseOptionsFlow(config_entries.OptionsFlow):
             else:
                 if bduss:
                     return await self._save_cookie(
-                        bduss, username, password, baiduid
+                        bduss, username, password, client.baiduid or baiduid
                     )
                 self._relogin = client
                 self._sms_sent_at = 0.0
@@ -689,10 +695,7 @@ class XiaoDuReverseOptionsFlow(config_entries.OptionsFlow):
                         default=self.config_entry.data.get(CONF_USERNAME, ""),
                     ): str,
                     vol.Required(CONF_PASSWORD): str,
-                    vol.Optional(
-                        CONF_BAIDUID,
-                        default=self.config_entry.data.get(CONF_BAIDUID, ""),
-                    ): str,
+                    vol.Optional(CONF_BAIDUID, default=""): str,
                 }
             ),
             errors=errors,
@@ -708,7 +711,7 @@ class XiaoDuReverseOptionsFlow(config_entries.OptionsFlow):
         client = self._relogin
 
         if client is not None and not self._mobile_tried:
-            # 进页面就查一次，让用户在发送之前看到号码。
+            # 进页面就查一次，用户在发送验证码之前就能看到号码。
             # 每个流程只查一次，发送失败重渲染时不再重复请求。
             self._mobile_tried = True
             try:
@@ -717,8 +720,6 @@ class XiaoDuReverseOptionsFlow(config_entries.OptionsFlow):
                     self._mobile = client.mobile
             except Exception as exc:  # noqa: BLE001
                 _LOGGER.warning("查询验证方式失败（不影响发码）: %s", exc)
-            if not self._mobile:
-                _LOGGER.warning("未能取得脱敏手机号，验证方式接口未返回 mobile 字段")
 
         if client is None:
             errors["base"] = ERROR_SESSION_EXPIRED
