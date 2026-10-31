@@ -123,9 +123,17 @@ class XiaoDuReverseConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     # ── session helpers ────────────────────────────────────────────────
 
     def _get_session(self) -> aiohttp.ClientSession:
-        """Return this flow's dedicated session (never the shared one)."""
+        """Return this flow's dedicated session.
+
+        刻意不使用 ``async_create_clientsession``：它会复用 HA 共享的
+        connector 与 SSL 上下文，实测在登录后的「验证方式查询」上稳定返回
+        ``810010（系统繁忙）``；而用完全独立的 session 发同样的请求
+        （同账号、同参数、同一分钟）返回 ``110000`` 并能带出脱敏手机号。
+        """
         if self._session is None or self._session.closed:
-            self._session = async_create_clientsession(self.hass)
+            self._session = aiohttp.ClientSession(
+                cookie_jar=aiohttp.CookieJar(unsafe=True)
+            )
         return self._session
 
     def _drop_session(self) -> None:
@@ -134,6 +142,8 @@ class XiaoDuReverseConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     def async_remove(self) -> None:
         """Release the per-flow session when the flow ends."""
+        if self._session is not None and not self._session.closed:
+            self.hass.async_create_task(self._session.close())
         self._session = None
 
     @staticmethod
@@ -262,6 +272,19 @@ class XiaoDuReverseConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         detail = ""
         client = self._relogin
 
+        if client is not None and not self._mobile_tried:
+            # 进页面就查一次，让用户在发送之前看到号码。
+            # 每个流程只查一次，发送失败重渲染时不再重复请求。
+            self._mobile_tried = True
+            try:
+                await client.async_get_methods(retries=3)
+                if client.mobile:
+                    self._mobile = client.mobile
+            except Exception as exc:  # noqa: BLE001
+                _LOGGER.warning("查询验证方式失败（不影响发码）: %s", exc)
+            if not self._mobile:
+                _LOGGER.warning("未能取得脱敏手机号，验证方式接口未返回 mobile 字段")
+
         if client is None:
             errors["base"] = ERROR_SESSION_EXPIRED
         elif user_input is not None:
@@ -287,13 +310,14 @@ class XiaoDuReverseConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         or str(result.get("code")) == "110000"
                     ):
                         self._sms_sent_at = time.time()
-                        # 发送成功后验证流程才真正激活，此时查询能稳定拿到脱敏号码
-                        try:
-                            await client.async_get_methods(retries=3)
-                            if client.mobile:
-                                self._mobile = client.mobile
-                        except Exception as exc:  # noqa: BLE001
-                            _LOGGER.warning("发送后查询验证方式失败: %s", exc)
+                        if not self._mobile:
+                            # 进页面时没拿到，发送后再补一次（此时流程已激活）
+                            try:
+                                await client.async_get_methods(retries=2)
+                                if client.mobile:
+                                    self._mobile = client.mobile
+                            except Exception as exc:  # noqa: BLE001
+                                _LOGGER.warning("发送后查询验证方式失败: %s", exc)
                         return await self.async_step_sms_code()
                     errors["base"] = ERROR_SMS_FAILED
                     code = str(result.get("code") or "")
@@ -561,9 +585,15 @@ class XiaoDuReverseOptionsFlow(config_entries.OptionsFlow):
         self._pending_baiduid: str = ""
 
     def _get_session(self) -> aiohttp.ClientSession:
-        """Return the options flow's dedicated session."""
+        """Return the options flow's dedicated session.
+
+        同 ConfigFlow：不用 ``async_create_clientsession``，避免共享 connector
+        与 SSL 上下文导致验证方式查询返回 ``810010``。
+        """
         if self._session is None or self._session.closed:
-            self._session = async_create_clientsession(self.hass)
+            self._session = aiohttp.ClientSession(
+                cookie_jar=aiohttp.CookieJar(unsafe=True)
+            )
         return self._session
 
     def _drop_session(self) -> None:
@@ -572,6 +602,8 @@ class XiaoDuReverseOptionsFlow(config_entries.OptionsFlow):
 
     def async_remove(self) -> None:
         """Release the per-flow session."""
+        if self._session is not None and not self._session.closed:
+            self.hass.async_create_task(self._session.close())
         self._session = None
 
     async def async_step_init(
@@ -688,6 +720,19 @@ class XiaoDuReverseOptionsFlow(config_entries.OptionsFlow):
         detail = ""
         client = self._relogin
 
+        if client is not None and not self._mobile_tried:
+            # 进页面就查一次，让用户在发送之前看到号码。
+            # 每个流程只查一次，发送失败重渲染时不再重复请求。
+            self._mobile_tried = True
+            try:
+                await client.async_get_methods(retries=3)
+                if client.mobile:
+                    self._mobile = client.mobile
+            except Exception as exc:  # noqa: BLE001
+                _LOGGER.warning("查询验证方式失败（不影响发码）: %s", exc)
+            if not self._mobile:
+                _LOGGER.warning("未能取得脱敏手机号，验证方式接口未返回 mobile 字段")
+
         if client is None:
             errors["base"] = ERROR_SESSION_EXPIRED
         elif user_input is not None:
@@ -713,13 +758,14 @@ class XiaoDuReverseOptionsFlow(config_entries.OptionsFlow):
                         or str(result.get("code")) == "110000"
                     ):
                         self._sms_sent_at = time.time()
-                        # 发送成功后验证流程才真正激活，此时查询能稳定拿到脱敏号码
-                        try:
-                            await client.async_get_methods(retries=3)
-                            if client.mobile:
-                                self._mobile = client.mobile
-                        except Exception as exc:  # noqa: BLE001
-                            _LOGGER.warning("发送后查询验证方式失败: %s", exc)
+                        if not self._mobile:
+                            # 进页面时没拿到，发送后再补一次（此时流程已激活）
+                            try:
+                                await client.async_get_methods(retries=2)
+                                if client.mobile:
+                                    self._mobile = client.mobile
+                            except Exception as exc:  # noqa: BLE001
+                                _LOGGER.warning("发送后查询验证方式失败: %s", exc)
                         return await self.async_step_sms_code()
                     errors["base"] = ERROR_SMS_FAILED
                     code = str(result.get("code") or "")
