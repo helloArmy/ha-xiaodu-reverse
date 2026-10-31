@@ -4,10 +4,10 @@
   "codeowners": [],
   "config_flow": true,
   "dependencies": [],
-  "documentation": "https://github.com/",
+  "documentation": "https://github.com/helloArmy/ha-xiaodu-reverse/blob/main/README.md",
   "integration_type": "hub",
   "iot_class": "cloud_polling",
-  "issue_tracker": "https://github.com/",
+  "issue_tracker": "https://github.com/helloArmy/ha-xiaodu-reverse/issues",
   "loggers": ["custom_components.xiaodu_reverse"],
   "requirements": ["cryptography>=3.3.2"],
   "version": "1.0.0"
