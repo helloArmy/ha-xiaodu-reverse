@@ -190,7 +190,7 @@ custom_components/xiaodu_reverse/
 
 ### v1.3.5（2026-10-31）· 实测支持 Home Assistant 2024.1.0
 
-- **`ConfigEntry` 泛型降级** — `ConfigEntry[XiaoDuCoordinator]` 是 2024.6 才支持的写法，在 2024.1~2024.5 会抛 `TypeError: type 'ConfigEntry' is not subscriptable`，且发生在模块顶层，导致**整个集成导入失败、条目完全无法 setup**。这才是原先版本号写 `2024.6.0` 的真正原因。改为 `try/except` 探测后降级为非泛型
+- **`ConfigEntry` 泛型降级** — `ConfigEntry[XiaoDuCoordinator]` 是 2024.6 才支持的写法，在 2024.1~2024.5 会抛 `TypeError: type 'ConfigEntry' is not subscriptable`，且发生在模块顶层，导致**整个集成导入失败、条目完全无法 setup**。改为 `try/except` 探测后降级为非泛型
 - **在真实 2024.1.0 容器（Python 3.11.6）上端到端实测** — 17/17 模块导入、条目 setup 成功、读到真实状态（窗帘 `degree=50 ON`）、控制 50%→30% 16 秒到位，无任何 Traceback；同时复测 HA 2026.1.3 全部通过
 - **品牌图标换成小度官方图标** — 由此前的自制紫底字标改为小度官方 App 图标（红蓝气泡），并新增 `dark_icon.png` 深色主题版本
 
@@ -200,7 +200,7 @@ custom_components/xiaodu_reverse/
 - **最低版本定为 `2024.1.0`** — `hacs.json` 同步；HAOS / Supervised / Container / Core 四种安装形态均可用
 - **吸尘器状态跨版本自适应** — HA 2025.1 起改用 `activity` 属性 + `VacuumActivity` 枚举，2024.x 只认 `state` 字符串。原来在模块级直接 `from ... import VacuumActivity`，在 2024.x 上会 ImportError 并连带整个条目 setup 失败。改为 `try/except` 探测后按版本挂载对应属性（两个属性语义互斥，只挂其一）
 - **选项流程跨版本自适应** — `OptionsFlow.config_entry` 是 2024.11 才由框架注入的只读属性；更早版本拿不到。改为运行时探测该 property 是否存在，不存在时在 `__init__` 里自行注入
-- **`ConfigEntry` 泛型降级** — `ConfigEntry[XiaoDuCoordinator]` 是 2024.6 才支持的写法，在 2024.1~2024.5 会 `TypeError: type 'ConfigEntry' is not subscriptable`，导致**整个集成导入失败**（这也是原先版本号写 2024.6.0 的真正原因）。改为 `try/except` 探测后降级为非泛型
+- **`ConfigEntry` 泛型降级** — `ConfigEntry[XiaoDuCoordinator]` 是 2024.6 才支持的写法，在 2024.1~2024.5 会 `TypeError: type 'ConfigEntry' is not subscriptable`，导致**整个集成导入失败**。改为 `try/except` 探测后降级为非泛型
 
 </details>
 
