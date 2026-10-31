@@ -2,7 +2,7 @@
 
 [![Release](https://img.shields.io/github/v/release/helloArmy/ha-xiaodu-reverse?label=release)](https://github.com/helloArmy/ha-xiaodu-reverse/releases)
 [![HACS](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/helloArmy/ha-xiaodu-reverse)
-[![HA](https://img.shields.io/badge/Home%20Assistant-2024.6%2B-18BCEE.svg)](https://www.home-assistant.io/)
+[![HA](https://img.shields.io/badge/Home%20Assistant-2025.1%2B-18BCEE.svg)](https://www.home-assistant.io/)
 
 把**小度（百度 DuerOS）智能家居 App 里已有的设备**反向接入 Home Assistant —— 你可以继续在小度 App 里管理设备，同时在 HA 里做自动化、仪表盘和语音联动。
 
@@ -18,6 +18,18 @@
 - **传感器**：温度、湿度、PM2.5、CO₂、滤芯寿命、电量等按 `stateSetting` 自动生成
 - **凭据自愈**：轮询发现 `not login` 时用保存的账号密码自动重登，失败才要求重新认证
 - **批量轮询**：优先用 `GET_APPLIANCES_BY_ID` 一次拉全部设备状态，缺数据再逐台回退
+
+## 环境要求
+
+| 项 | 要求 |
+|---|---|
+| Home Assistant | **2025.1 或更高** |
+| HACS（仅安装时需要） | 任意近期版本；也可手动复制文件 |
+| 网络 | 需能访问百度小度云（`passport.baidu.com`、`xiaodu.baidu.com`） |
+| 账号 | 小度 App 中已绑定设备的小度（百度）账号 |
+| 额外依赖 | 无。只用 HA 自带的 `aiohttp` 与 `cryptography` |
+
+**为什么是 2025.1**：集成用到两个较新的核心 API —— `vacuum.VacuumActivity`（2025.1 引入）和 `OptionsFlow.config_entry` 属性（2024.11 引入）。低于 2025.1 时 vacuum 平台会导入失败，选项流程也拿不到 config entry。
 
 ## 安装
 
@@ -169,7 +181,15 @@ custom_components/xiaodu_reverse/
 
 > 只有最新版本保持展开，每发一个新版本就把上一版折叠起来。
 
-### v1.3.3（2026-10-31）· 修复验证控件 810010 / 110001
+### v1.3.4（2026-10-31）· 修正 Home Assistant 最低版本要求
+
+- **`hacs.json` 的 `homeassistant` 从 `2024.6.0` 改为 `2025.1.0`** — 原来声明偏低，在 2024.6~2024.12 上安装会直接失败。核对代码依赖后，实际最低版本由两个核心 API 决定：
+  - `vacuum.VacuumActivity`（**2025.1** 引入）—— vacuum 平台在模块级直接 import，低版本会 ImportError，连带整个条目 setup 失败
+  - `OptionsFlow.config_entry` 属性（**2024.11** 引入）—— 选项流程里到处用 `self.config_entry`，低版本拿不到该属性
+- **README 新增「环境要求」章节** — 说明 HA 版本、网络、账号与依赖要求，并解释为什么卡在 2025.1
+
+<details>
+<summary>v1.3.3（2026-10-31）· 修复验证控件 810010 / 110001</summary>
 
 - **登录终于稳定了** — 现象是输完账号密码后，验证方式查询恒返回 `810010（系统繁忙）`、`data` 为空，发码则返回 `110001（参数错误）`。用 Chrome DevTools 在真实浏览器里跑一遍登录、逐字段对比请求后定位到三个原因：
   - **缺 `ppfuid` cookie**（浏览器侧生成的 32 位设备指纹 uid）。没有它，验证控件直接判「繁忙」。真实浏览器请求头里一直带着，我们从未发送过。补齐后 `code` 立刻从 `810010` 变成 `110000`，并带出脱敏手机号
@@ -239,6 +259,8 @@ custom_components/xiaodu_reverse/
 - **修复 HA 2026.10（Python 3.14）兼容** — `VacuumEntityFeature.BATTERY` 已被移除，类体硬引用导致 vacuum 平台 ImportError、整条 setup 失败；改用 `getattr` 容错构造
 - **修复 `__repr__` 无限递归爆栈** — `XiaoDuEntity.state()` 覆盖了 HA 的 `Entity.state` property，`str(self.state)` 得到 bound method，其 repr 又引用实体，触发 `RecursionError: Stack overflow`，所有实体 `Error adding entity` 且恒为 unavailable；改名为 `attr_value()`
 - **窗帘位置字段补充 `degree`** — 小度窗帘实际使用 `degree` 而非 `position`
+
+</details>
 
 </details>
 

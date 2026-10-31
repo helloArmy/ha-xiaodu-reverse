@@ -13,5 +13,5 @@
   "loggers": [
     "custom_components.xiaodu_reverse"
   ],
-  "version": "1.3.3"
+  "version": "1.3.4"
 }
