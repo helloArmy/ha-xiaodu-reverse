@@ -49,6 +49,7 @@
     "error": {
       "login_failed": "登录失败，请检查账号密码。",
       "login_blocked": "百度风控拦截了本次登录，请稍后重试，或改用 Cookie 登录。",
+      "verify_required": "百度认为这是一次新设备登录，要求先做二次验证，且没有给出短信验证入口。请改用上一页的「直接填写 BDUSS Cookie」方式：浏览器打开小度网页版登录后，从开发者工具 → Application → Cookies 复制 BDUSS 的值。",
       "captcha_required": "本次登录需要图形验证码，请稍后重试，或先在浏览器登录小度网页版再改用 Cookie 登录。",
       "invalid_auth": "BDUSS 已失效或无效，请重新获取。",
       "cannot_connect": "无法连接小度服务器，请检查网络后重试。",

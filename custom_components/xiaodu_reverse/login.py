@@ -103,12 +103,17 @@ class BaiduLoginBlocked(BaiduLoginError):
     """Login was blocked by risk control (e.g. SMS verification)."""
 
     def __init__(
-        self, message: str, verify_token: str = "", username: str = ""
+        self,
+        message: str,
+        verify_token: str = "",
+        username: str = "",
+        verify_url: str = "",
     ) -> None:
         """Store the SMS verify token handed back by Baidu."""
         super().__init__(message)
         self.verify_token = verify_token
         self.username = username
+        self.verify_url = verify_url
 
 
 class BaiduLogin:
@@ -351,9 +356,10 @@ class BaiduLogin:
                 "ptoken": result.get("data", {}).get("ptoken", ""),
             }
         if str(no) == "400023":
-            # Risk control demands SMS verification. Parse the verify token
-            # from the response so the config flow can dispatch an SMS and
-            # retry with the code the user enters.
+            # Risk control demands a second-factor step. Two shapes occur:
+            #  * an SMS challenge that hands back a verifyToken we can use;
+            #  * a device-trust challenge that only offers a verifyUrl page,
+            #    in which case only cookie login can complete the flow.
             token = ""
             data = result.get("data", {}) or {}
             for key in (
@@ -367,11 +373,16 @@ class BaiduLogin:
                 if data.get(key):
                     token = str(data[key])
                     break
+            verify_url = ""
+            for key in ("verifyUrl", "verify_url", "gotoUrl"):
+                if data.get(key):
+                    verify_url = str(data[key])
+                    break
             raise BaiduLoginBlocked(
-                "百度风控要求短信验证（400023）。已尝试发送短信验证码，"
-                "请输入收到的短信验证码完成登录。",
+                "百度风控要求二次验证（400023）。",
                 verify_token=token,
                 username=username,
+                verify_url=verify_url,
             )
         if str(no) in ("340002", "500001", "500002", "50020", "50021", "50052"):
             raise BaiduCaptchaRequired(

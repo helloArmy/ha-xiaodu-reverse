@@ -42,6 +42,20 @@ STATE_MAP: dict[str, VacuumActivity] = {
 }
 
 
+def _vacuum_features() -> VacuumEntityFeature:
+    """Build the feature set tolerating enum changes across HA versions.
+
+    ``VacuumEntityFeature.BATTERY`` was removed in HA 2026.10 (battery is now
+    reported through the ``battery_level`` property and a separate sensor), so
+    every flag is looked up defensively instead of being hard-referenced in the
+    class body — an AttributeError there breaks the whole platform import.
+    """
+    features = VacuumEntityFeature(0)
+    for name in ("START", "PAUSE", "STOP", "RETURN_HOME", "STATE", "BATTERY", "LOCATE"):
+        features |= getattr(VacuumEntityFeature, name, VacuumEntityFeature(0))
+    return features
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: ConfigEntry,
@@ -62,14 +76,7 @@ class XiaoDuVacuum(XiaoDuEntity, StateVacuumEntity):
     """A XiaoDu robot vacuum."""
 
     _attr_has_entity_name = True
-    _attr_supported_features = (
-        VacuumEntityFeature.START
-        | VacuumEntityFeature.PAUSE
-        | VacuumEntityFeature.STOP
-        | VacuumEntityFeature.RETURN_HOME
-        | VacuumEntityFeature.STATE
-        | VacuumEntityFeature.BATTERY
-    )
+    _attr_supported_features = _vacuum_features()
 
     def __init__(
         self,

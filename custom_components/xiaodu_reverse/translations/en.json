@@ -49,6 +49,7 @@
     "error": {
       "login_failed": "Login failed — check the account and password.",
       "login_blocked": "Baidu risk control blocked this login. Try again later, or use cookie login.",
+      "verify_required": "Baidu treats this as a new-device login and wants a second-factor check, but offered no SMS entry point. Use the \"BDUSS cookie\" option instead: sign in to the XiaoDu web page, then copy the BDUSS value from Developer Tools → Application → Cookies.",
       "captcha_required": "This login needs an image captcha. Try again later, or sign in to the XiaoDu web page first and use cookie login.",
       "invalid_auth": "The BDUSS cookie is invalid or expired.",
       "cannot_connect": "Cannot reach the XiaoDu cloud. Check the network and retry.",

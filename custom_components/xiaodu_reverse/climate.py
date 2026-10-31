@@ -50,6 +50,19 @@ DEFAULT_MAX_TEMP = 32.0
 DEFAULT_TARGET_STEP = 1.0
 
 
+def _climate_features() -> ClimateEntityFeature:
+    """Build the feature set tolerating enum changes across HA versions.
+
+    Referencing a removed flag directly in the class body raises
+    AttributeError at import time and takes the whole platform down, so each
+    flag is looked up defensively.
+    """
+    features = ClimateEntityFeature(0)
+    for name in ("TARGET_TEMPERATURE", "FAN_MODE", "TURN_ON", "TURN_OFF"):
+        features |= getattr(ClimateEntityFeature, name, ClimateEntityFeature(0))
+    return features
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: ConfigEntry,
@@ -73,12 +86,7 @@ class XiaoDuClimate(XiaoDuEntity, ClimateEntity):
     _attr_temperature_unit = UnitOfTemperature.CELSIUS
     _attr_target_temperature_step = DEFAULT_TARGET_STEP
     _enable_turn_on_off_backwards_compatibility = False
-    _attr_supported_features = (
-        ClimateEntityFeature.TARGET_TEMPERATURE
-        | ClimateEntityFeature.FAN_MODE
-        | ClimateEntityFeature.TURN_ON
-        | ClimateEntityFeature.TURN_OFF
-    )
+    _attr_supported_features = _climate_features()
 
     def __init__(
         self,

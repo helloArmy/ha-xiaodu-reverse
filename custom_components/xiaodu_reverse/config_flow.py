@@ -177,7 +177,11 @@ class XiaoDuReverseConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                             username, exc.verify_token, baiduid=baiduid
                         )
                         return await self.async_step_sms_verify(sms_sent=sent)
-                    errors["base"] = ERROR_LOGIN_BLOCKED
+                    # Device-trust challenge without an SMS token: the only
+                    # way through is a browser login + BDUSS cookie.
+                    errors["base"] = (
+                        "verify_required" if exc.verify_url else ERROR_LOGIN_BLOCKED
+                    )
                 except BaiduCaptchaRequired as exc:
                     _LOGGER.warning("小度登录需要图形验证码: %s", exc.codestring)
                     errors["base"] = "captcha_required"

@@ -22,7 +22,13 @@ from .entity import XiaoDuEntity, get_runtime, types_for
 
 _LOGGER = logging.getLogger(__name__)
 
-POSITION_KEYS = ("position", "curtainPosition", "percentControl", "openPercent")
+POSITION_KEYS = (
+    "degree",           # 小度窗帘实际使用的开合度（0-100）
+    "position",
+    "curtainPosition",
+    "percentControl",
+    "openPercent",
+)
 
 
 async def async_setup_entry(
