@@ -501,12 +501,22 @@ class XiaoDuReverseOptionsFlow(config_entries.OptionsFlow):
             username = str(user_input.get(CONF_USERNAME, "")).strip()
             password = str(user_input.get(CONF_PASSWORD, ""))
             baiduid = str(user_input.get(CONF_BAIDUID, "")).strip()
-            client = BaiduLogin(self._get_session())
+            session = self._get_session()
+            client = BaiduLogin(session)
+            if not baiduid:
+                # Same as the initial flow: BAIDUID is issued by baidu.com.
+                baiduid = await fetch_baiduid(session)
             try:
                 result = await client.login(username, password, baiduid=baiduid)
             except BaiduLoginBlocked as exc:
-                errors["base"] = ERROR_LOGIN_BLOCKED
                 _LOGGER.warning("Options 重新登录被风控拦截: %s", exc)
+                if not exc.verify_token:
+                    # Account/password login is judged as an unknown device and
+                    # retrying cannot succeed. Jump straight to the BDUSS step
+                    # so the user can actually finish instead of hitting the
+                    # same wall repeatedly.
+                    return await self.async_step_cookie()
+                errors["base"] = ERROR_LOGIN_BLOCKED
             except BaiduCaptchaRequired:
                 errors["base"] = "captcha_required"
             except BaiduLoginError as exc:

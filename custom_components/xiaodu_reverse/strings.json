@@ -78,11 +78,11 @@
       },
       "relogin": {
         "title": "重新登录",
-        "description": "使用百度账号密码重新登录以刷新凭据。",
+        "description": "使用百度账号密码重新登录以刷新凭据。\n\nBAIDUID 可留空，集成会自动获取。\n\n注意：百度会把服务器发起的登录请求按陌生设备处理，很可能返回风控二次验证（400023）。一旦出现，集成会自动切换到「更新 BDUSS Cookie」步骤，请按那里的指引从浏览器复制 BDUSS。",
         "data": {
           "username": "百度账号",
           "password": "密码",
-          "baiduid": "BAIDUID（可选）"
+          "baiduid": "BAIDUID（可选，留空自动获取）"
         }
       },
       "cookie": {

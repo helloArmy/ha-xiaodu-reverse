@@ -78,11 +78,11 @@
       },
       "relogin": {
         "title": "Sign in again",
-        "description": "Sign in with the Baidu account to refresh the credential.",
+        "description": "Sign in with the Baidu account to refresh the credential.\n\nBAIDUID may be left blank — it is fetched automatically.\n\nNote: Baidu treats sign-ins originating from a server as an unknown device and will likely return a risk-control challenge (400023). When that happens the integration switches to the \"Update BDUSS cookie\" step automatically — follow the instructions there.",
         "data": {
           "username": "Baidu account",
           "password": "Password",
-          "baiduid": "BAIDUID (optional)"
+          "baiduid": "BAIDUID (optional, auto-fetched)"
         }
       },
       "cookie": {
