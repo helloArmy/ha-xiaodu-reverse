@@ -227,22 +227,25 @@ class BaiduLogin:
         ct = self._aes_ecb_encrypt(key, plain.encode())
         sig = base64.b64encode(base64.b64encode(ct)).decode()
 
-        # shaOne: SHA1(md5(ms)) loop until hex starts with "00"
-        a = int(time.time() * 1000)
+        # shaOne: SHA1(md5(ms)) 迭代直到十六进制以 "00" 开头
+        # elapsed = 这段循环的真实耗时（毫秒），JS 里就是这么算的
+        started = int(time.time() * 1000)
+        a = started
         while True:
             a = hashlib.sha1(
                 hashlib.md5(str(a).encode()).hexdigest().encode()
             ).hexdigest()
             if a.startswith("00"):
                 break
-        rinfo = '{"fuid": "%s"}' % hashlib.md5(self._fuid.encode()).hexdigest()
+        elapsed = int(time.time() * 1000) - started
         return {
             "sig": sig,
             "shaOne": a,
             "time": str(now_s),
             "alg": "v3",
-            "elapsed": "6",
-            "rinfo": rinfo,
+            "elapsed": str(elapsed) if elapsed else "",
+            # rinfo 只有在浏览器里存在 passFingerPrint 时才有；拿不到真实指纹就不传
+            "rinfo": "",
         }
 
     async def _get_servertime(self, cookie: str) -> str:

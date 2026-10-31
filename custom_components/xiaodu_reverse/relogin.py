@@ -32,7 +32,7 @@ import time
 import uuid
 from collections.abc import Awaitable, Callable
 from typing import Any
-from urllib.parse import quote, urlencode
+from urllib.parse import quote, unquote, urlencode
 
 import aiohttp
 
@@ -228,23 +228,59 @@ def build_dv() -> str:
 # ── 小工具 ─────────────────────────────────────────────────────────────────
 
 
+def _normalize_pem(value: Any) -> str:
+    """把百度返回的公钥还原成标准 PEM。
+
+    百度会在 ``getpublickey`` 里对换行做**多层**转义（``\\n`` 甚至 ``\\\\n``），
+    只做一次 ``replace("\\\\n", "\\n")`` 会残留字面反斜杠，
+    cryptography 会报 ``Invalid symbol 92``。这里把任意层级的反斜杠 n 都还原。
+    """
+    text = str(value)
+    # base64 里的 "/" 会被 JSON 转义成 "\/"，必须先还原
+    text = text.replace("\\/", "/")
+    text = re.sub(r"\\+r\\+n", "\n", text)
+    text = re.sub(r"\\+n", "\n", text)
+    text = re.sub(r"\\+r", "\r", text)
+    text = text.replace("\r\n", "\n").strip()
+    if len(text) >= 2 and text[0] == text[-1] and text[0] in "\"'":
+        text = text[1:-1].strip()
+    if not text.startswith("-----BEGIN"):
+        raise ReloginError(f"公钥格式异常，无法识别：{text[:60]}")
+    return text
+
+
 def _rsa_encrypt(pubkey_pem: str, plain: str) -> str:
     """用百度动态下发的 RSA 公钥做 PKCS1v15 加密（crypttype=12）。"""
     from cryptography.hazmat.primitives import serialization
     from cryptography.hazmat.primitives.asymmetric import padding
 
-    key = serialization.load_pem_public_key(pubkey_pem.encode())
+    try:
+        key = serialization.load_pem_public_key(pubkey_pem.encode())
+    except ValueError as exc:
+        raise ReloginError(f"公钥无法加载：{exc}") from exc
     return base64.b64encode(key.encrypt(plain.encode(), padding.PKCS1v15())).decode()
 
 
 def _strip_jsonp(text: str) -> dict[str, Any]:
-    """剥掉 JSONP 外壳并解析。"""
+    """剥掉 JSONP 外壳并解析。
+
+    百度的 ``getpublickey`` 返回的是 JS 对象字面量而不是严格 JSON
+    （``{"errno":'0',"msg":'',"pubkey":'...'}``），所以标准解析失败后
+    还要把单引号字符串转成双引号再试一次。
+    """
     body = text.strip()
     match = re.search(r"^[^(]*\((.*)\)\s*;?\s*$", body, re.S)
     if match:
-        body = match.group(1)
+        body = match.group(1).strip()
     try:
         return json.loads(body)
+    except json.JSONDecodeError:
+        pass
+
+    # 逐段把 '...' 换成 JSON 字符串（json.dumps 负责转义，比 replace 安全）
+    fixed = re.sub(r"'([^'\\]*(?:\\.[^'\\]*)*)'", lambda m: json.dumps(m.group(1)), body)
+    try:
+        return json.loads(fixed)
     except json.JSONDecodeError as exc:
         raise ReloginError(f"百度返回了非 JSON 内容：{body[:120]}") from exc
 
@@ -257,6 +293,28 @@ def _pick_bduss(set_cookie: list[str]) -> str:
         if name.strip() == "BDUSS":
             value = rest.split(";")[0].strip()
     return value
+
+
+def _extract_loginproxy(text: str) -> str:
+    """从登录响应里取出 loginproxy。
+
+    响应里它是 URL 编码过的（``loginproxy=https%3A%2F%2F...``），
+    且整串又被外层编码了一次，所以要一直解码到出现 ``http``。
+    """
+    match = re.search(r"loginproxy=([^&\s\"'<>]+)", text)
+    if not match:
+        return ""
+    value = match.group(1).replace("&amp;", "&")
+    # 百度会把整条 URL 编码两层：第一层解完仍是 "%3Floginproxy%26u%3D..."，
+    # 必须解到出现真正的 "?loginproxy" 为止，否则请求会 302 到 error.html
+    for _ in range(4):
+        if "?loginproxy" in value:
+            break
+        decoded = unquote(value)
+        if decoded == value:
+            break
+        value = decoded
+    return value if "loginproxy" in value else ""
 
 
 def _gen_gid() -> str:
@@ -290,6 +348,11 @@ class BaiduRelogin:
         self.password = password
         self.baiduid = baiduid
         self.authid = ""
+        self.authsid = ""
+        self._login_response = ""
+        # authField / authType 以 get 返回的 defaultMethodInfo 为准（见 authwidget.js）
+        self.auth_field = "mobile"
+        self.auth_type = "check"
         self.ltoken = ""
         self.lstr = ""
         self.loginproxy = ""
@@ -313,16 +376,30 @@ class BaiduRelogin:
         except (aiohttp.ClientError, asyncio.TimeoutError) as exc:
             _LOGGER.debug("获取 BAIDUID 失败: %s", exc)
 
+    def _inject_baiduid(self) -> None:
+        """把 BAIDUID 写进 cookie jar，而不是显式覆盖 Cookie 头。
+
+        显式 ``Cookie: BAIDUID=...`` 会把 jar 里服务端下发的其它 cookie
+        （UBI / logTraceID / pplogid 等）全部顶掉，导致验证控件认为
+        "状态不在线"（400021 / 810010）。
+        """
+        if not self.baiduid:
+            return
+        try:
+            self.session.cookie_jar.update_cookies(
+                {"BAIDUID": self.baiduid},
+                response_url=aiohttp.client.URL("https://passport.baidu.com/"),
+            )
+        except Exception as exc:  # noqa: BLE001
+            _LOGGER.debug("注入 BAIDUID 失败: %s", exc)
+
     def _headers(self, *, referer: str = _LOGIN_REFERER) -> dict[str, str]:
-        """公共请求头。"""
-        headers = {
+        """公共请求头（不带 Cookie，交给 jar 自动处理）。"""
+        return {
             "User-Agent": _USER_AGENT,
             "Referer": referer,
             "Accept-Language": "zh-CN,zh;q=0.9",
         }
-        if self.baiduid:
-            headers["Cookie"] = f"BAIDUID={self.baiduid}"
-        return headers
 
     # ── 第 1 步：账密登录 ───────────────────────────────────────────────
 
@@ -333,6 +410,7 @@ class BaiduRelogin:
         此时 ``authid`` / ``ltoken`` / ``lstr`` / ``loginproxy`` 已就绪。
         """
         await self._ensure_baiduid()
+        self._inject_baiduid()
         cookie = f"BAIDUID={self.baiduid}" if self.baiduid else ""
 
         gid = _gen_gid()
@@ -379,7 +457,7 @@ class BaiduRelogin:
             cert = _strip_jsonp(await resp.text())
         if not cert.get("pubkey"):
             raise ReloginError(f"未能取得登录公钥：{str(cert)[:160]}")
-        pem = str(cert["pubkey"]).replace("\\n", "\n")
+        pem = _normalize_pem(cert["pubkey"])
 
         data = {
             "staticpage": f"{_PASSPORT}/static/passpc-account/html/v3Jump.html",
@@ -431,9 +509,11 @@ class BaiduRelogin:
                 "shaOne": sig2["shaOne"],
                 "traceid": "",
                 "callback": "parent.bd__pcbs__abc123",
-                "rinfo": sig2.get("rinfo", ""),
             }
         )
+        # 只有能拿到真实设备指纹时才传 rinfo（浏览器里取决于 passFingerPrint 是否存在）
+        if sig2.get("rinfo"):
+            data["rinfo"] = sig2["rinfo"]
 
         async with self.session.post(
             f"{_PASSPORT}/v2/api/?login", data=data, headers=headers, timeout=45
@@ -453,11 +533,11 @@ class BaiduRelogin:
             raise ReloginRejected(f"登录被拒绝（err_no={err_no or '未知'}）")
 
         self.authid = _find(r"authid=([A-Za-z0-9_\-]{40,})", text)
+        self.authsid = _find(r"authsid=([A-Za-z0-9_\-]{10,})", text)
         self.ltoken = _find(r"ltoken=([0-9a-f]{32})", text)
         self.lstr = _find(r"lstr=([A-Za-z0-9%+\-_=/]{20,})", text)
-        proxy_match = re.search(r"(https?://[^\s\"'<>]*loginproxy[^\s\"'<>]*)", text)
-        if proxy_match:
-            self.loginproxy = proxy_match.group(1).replace("&amp;", "&")
+        self._login_response = text
+        self.loginproxy = _extract_loginproxy(text)
         if not self.authid:
             raise ReloginError("触发二次验证，但响应里没有 authid")
         _LOGGER.info("已进入二次验证，authid=%s…", self.authid[:12])
@@ -466,14 +546,21 @@ class BaiduRelogin:
     # ── 第 2 步：验证控件 ───────────────────────────────────────────────
 
     async def _widget_form(self, action: str, **auth_params: Any) -> dict[str, Any]:
-        """按 form 编码提交（send/get 用这个）。"""
+        """按 form 编码提交。
+
+        按 authwidget.js 的真实构造：
+        - ``get`` 只带 authid/action/authScene/authParams，**不带 authField/authType**
+          （多带会被判 110001）
+        - ``send`` / ``check`` 才带从 defaultMethodInfo 取得的 authField/authType
+        """
         payload = {
             "tpl": "mn",
             "client": "",
             "clientfrom": "pc",
             "authid": self.authid,
-            "authField": "mobile",
-            "authType": "check",
+            # get 也带 authField/authType —— 与 10:02 前实测成功的写法一致
+            "authField": self.auth_field,
+            "authType": self.auth_type,
             "action": action,
             "authScene": "login_force_verify",
             "callback": "parent.bd__pcbs__abc",
@@ -497,8 +584,8 @@ class BaiduRelogin:
             "client": "",
             "clientfrom": "pc",
             "authid": self.authid,
-            "authField": "mobile",
-            "authType": "check",
+            "authField": self.auth_field,
+            "authType": self.auth_type,
             "action": action,
             "authScene": "login_force_verify",
             "authParams": auth_params,
@@ -521,8 +608,25 @@ class BaiduRelogin:
             dxmAuth=0,
             clientPasskeysEnable=0,
         )
-        info = (result.get("data") or {}).get("defaultMethodInfo") or {}
-        self.mobile = str(info.get("mobile") or info.get("showMobile") or "")
+        data = result.get("data") or {}
+        info = data.get("defaultMethodInfo") or {}
+        # authwidget.js: var i = defaultMethodInfo.field, a = defaultMethodInfo.type
+        if info.get("field"):
+            self.auth_field = str(info["field"])
+        if info.get("type"):
+            self.auth_type = str(info["type"])
+        # 脱敏手机号在 methodsInfo[].methods.mobile.info.mobile，如 "177********"
+        for method in data.get("methodsInfo") or []:
+            mobile_info = (
+                ((method.get("methods") or {}).get("mobile") or {}).get("info") or {}
+            )
+            if mobile_info.get("mobile"):
+                self.mobile = str(mobile_info["mobile"])
+                break
+        if not self.mobile:
+            self.mobile = str(
+                info.get("mobile") or info.get("showMobile") or data.get("mobile") or ""
+            )
         return result
 
     async def async_send_code(self) -> dict[str, Any]:
@@ -562,6 +666,8 @@ class BaiduRelogin:
         浏览器这一步是 ``passport.data.jsonp()``，会自动补 ``apiver=v3`` 与
         ``tt``；缺了它们服务端直接 302 到 error.html。
         """
+        if not self.loginproxy:
+            self.loginproxy = _extract_loginproxy(getattr(self, "_login_response", ""))
         if not self.loginproxy:
             raise ReloginError("没有 loginproxy，无法换取 BDUSS")
         url = self.loginproxy + "&" + urlencode(

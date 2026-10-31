@@ -39,11 +39,15 @@
         }
       },
       "sms": {
-        "title": "短信验证",
-        "description": "百度要求短信二次验证。验证码将发送至 {mobile}。\n\n{detail}",
+        "title": "发送验证码",
+        "description": "百度要求短信二次验证。\n\n{detail}",
+        "data": {}
+      },
+      "sms_code": {
+        "title": "输入验证码",
+        "description": "{detail}\n\n验证码仅用于本次登录，提交后自动换取 BDUSS。",
         "data": {
-          "verifycode": "短信验证码",
-          "action": "操作"
+          "verifycode": "短信验证码"
         }
       }
     },
@@ -111,11 +115,15 @@
         }
       },
       "sms": {
-        "title": "短信验证",
-        "description": "百度要求短信二次验证。验证码将发送至 {mobile}。\n\n{detail}",
+        "title": "发送验证码",
+        "description": "百度要求短信二次验证。\n\n{detail}",
+        "data": {}
+      },
+      "sms_code": {
+        "title": "输入验证码",
+        "description": "{detail}\n\n验证码仅用于本次登录，提交后自动换取 BDUSS。",
         "data": {
-          "verifycode": "短信验证码",
-          "action": "操作"
+          "verifycode": "短信验证码"
         }
       }
     },

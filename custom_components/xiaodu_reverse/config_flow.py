@@ -25,7 +25,6 @@ from .const import (
     ABORT_NO_DEVICE,
     ABORT_NO_HOUSE,
     ABORT_REAUTH,
-    CONF_ACTION,
     CONF_APPLIANCE_TYPES,
     CONF_BAIDUID,
     CONF_COOKIE,
@@ -54,8 +53,6 @@ from .const import (
     MAX_SCAN_INTERVAL,
     MIN_SCAN_INTERVAL,
     NAME,
-    SMS_ACTION_SEND,
-    SMS_ACTION_SUBMIT,
     SMS_RESEND_INTERVAL,
 )
 from .login import fetch_baiduid
@@ -79,17 +76,20 @@ def _sms_wait_seconds(sent_at: float) -> int:
 
 
 def _build_sms_placeholders(
-    sent_at: float, mobile: str, detail: str = ""
+    sent_at: float, mobile: str, detail: str = "", stage: str = "send"
 ) -> dict[str, str]:
     """短信步骤的描述占位符。"""
+    who = mobile or "你百度账号绑定的手机"
     wait = _sms_wait_seconds(sent_at)
-    if not sent_at:
-        hint = "尚未发送验证码，请先点击「发送验证码」。"
+    if stage == "code":
+        hint = f"验证码已发送至{who}，填入后点提交完成登录。"
+    elif not sent_at:
+        hint = "点击下方提交按钮，向百度请求发送短信验证码。"
     elif wait > 0:
-        hint = f"验证码已发送，距离可重新发送还有 {wait} 秒。"
+        hint = f"验证码已发送至{who}，{wait} 秒后可重新发送。"
     else:
-        hint = "验证码已发送，若未收到可以重新发送。"
-    return {"mobile": mobile or "你绑定的手机号", "detail": detail or hint, "hint": hint}
+        hint = f"验证码已发送至{who}，未收到可以再发一次。"
+    return {"mobile": who, "detail": detail or hint, "hint": hint}
 
 
 class XiaoDuReverseConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -205,6 +205,9 @@ class XiaoDuReverseConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 except ReloginError as exc:
                     _LOGGER.warning("小度账密登录失败: %s", exc)
                     errors["base"] = ERROR_LOGIN_BLOCKED
+                except Exception:  # noqa: BLE001
+                    _LOGGER.exception("小度账密登录出现未预期异常")
+                    errors["base"] = ERROR_UNKNOWN
                 else:
                     if bduss:
                         self._cookie = bduss
@@ -241,99 +244,117 @@ class XiaoDuReverseConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """距离可以重新发送还剩多少秒（0 表示现在就能发）。"""
         return _sms_wait_seconds(self._sms_sent_at)
 
-    def _sms_placeholders(self, detail: str = "") -> dict[str, str]:
+    def _sms_placeholders(
+        self, detail: str = "", stage: str = "send"
+    ) -> dict[str, str]:
         """拼出短信步骤的描述占位符。"""
-        return _build_sms_placeholders(self._sms_sent_at, self._mobile, detail)
+        return _build_sms_placeholders(
+            self._sms_sent_at, self._mobile, detail, stage
+        )
 
     async def async_step_sms(
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.ConfigFlowResult:
-        """发送/重发验证码，或提交验证码完成登录。"""
+        """第一步：发送验证码（点提交即发送）。"""
         errors: dict[str, str] = {}
         detail = ""
         client = self._relogin
 
         if client is not None and not self._mobile and client.mobile:
-            # 登录步骤里没取到就再补一次，避免只显示占位文案
+            # 登录步骤里没取到就再补一次
             self._mobile = client.mobile
+
         if client is None:
             errors["base"] = ERROR_SESSION_EXPIRED
         elif user_input is not None:
-            action = str(user_input.get(CONF_ACTION) or SMS_ACTION_SEND)
-            code = str(user_input.get(CONF_VERIFYCODE, "")).strip()
             wait = self._sms_wait()
-
-            if action == SMS_ACTION_SEND:
-                if wait > 0:
-                    errors["base"] = ERROR_RESEND_TOO_SOON
-                    detail = f"请等待 {wait} 秒后再重新发送。"
-                else:
-                    try:
-                        result = await client.async_send_code()
-                    except ReloginError as exc:
-                        _LOGGER.warning("短信下发失败: %s", exc)
-                        errors["base"] = ERROR_SMS_FAILED
-                        detail = str(exc)
-                    else:
-                        if (
-                            result.get("send") == "success"
-                            or str(result.get("code")) == "110000"
-                        ):
-                            self._sms_sent_at = time.time()
-                            self._mobile = client.mobile or self._mobile
-                            detail = "验证码已发送，请查收短信。"
-                        else:
-                            errors["base"] = ERROR_SMS_FAILED
-                            detail = f"百度未接受发送请求：{str(result)[:120]}"
+            if wait > 0:
+                errors["base"] = ERROR_RESEND_TOO_SOON
+                detail = f"请等待 {wait} 秒后再发送。"
             else:
-                if not code:
-                    errors["base"] = ERROR_CODE_REQUIRED
+                try:
+                    result = await client.async_send_code()
+                except ReloginError as exc:
+                    _LOGGER.warning("%s短信下发失败: %s", "", exc)
+                    errors["base"] = ERROR_SMS_FAILED
+                    detail = str(exc)
+                except Exception:  # noqa: BLE001
+                    _LOGGER.exception("%s短信下发出现未预期异常", "")
+                    errors["base"] = ERROR_UNKNOWN
                 else:
-                    try:
-                        passed = await client.async_verify_code(code)
-                        if not passed:
-                            raise ReloginRejected("验证码未通过")
-                        bduss = await client.async_exchange_bduss()
-                    except ReloginRejected:
-                        errors["base"] = ERROR_LOGIN_FAILED
-                        detail = "验证码不正确或已过期，请重新输入。"
-                    except ReloginNeedsCode as exc:
-                        errors["base"] = ERROR_CODE_REQUIRED
-                        detail = str(exc)
-                    except ReloginError as exc:
-                        _LOGGER.warning("换取 BDUSS 失败: %s", exc)
-                        if "120018" in str(exc):
-                            errors["base"] = ERROR_SESSION_EXPIRED
-                            detail = "验证会话已过期，请返回重新登录。"
-                        else:
-                            errors["base"] = ERROR_LOGIN_BLOCKED
-                            detail = str(exc)
+                    if (
+                        result.get("send") == "success"
+                        or str(result.get("code")) == "110000"
+                    ):
+                        self._sms_sent_at = time.time()
+                        return await self.async_step_sms_code()
+                    errors["base"] = ERROR_SMS_FAILED
+                    code = str(result.get("code") or "")
+                    msg = str(result.get("message") or "")
+                    if code in ("110001", "810010"):
+                        # 实测：服务器发起的 120021 会话，验证控件恒返回参数错误
+                        detail = (
+                            f"百度拒绝了服务器发起的短信验证（{code} {msg}）。"
+                            "这条路径目前走不通，请改用「更新 BDUSS Cookie」方式。"
+                        )
                     else:
-                        self._cookie = bduss
-                        if self._reauth_entry is not None:
-                            return await self._finish_reauth()
-                        return await self._after_auth()
+                        detail = f"百度未接受发送请求：{str(result)[:160]}"
 
         return self.async_show_form(
             step_id="sms",
-            data_schema=vol.Schema(
-                {
-                    vol.Optional(CONF_VERIFYCODE, default=""): str,
-                    vol.Required(
-                        CONF_ACTION,
-                        default=(
-                            SMS_ACTION_SUBMIT if self._sms_sent_at else SMS_ACTION_SEND
-                        ),
-                    ): vol.In(
-                        {
-                            SMS_ACTION_SEND: "发送验证码",
-                            SMS_ACTION_SUBMIT: "确定，完成登录",
-                        }
-                    ),
-                }
-            ),
+            data_schema=vol.Schema({}),
             errors=errors,
-            description_placeholders=self._sms_placeholders(detail),
+            description_placeholders=self._sms_placeholders(detail, stage="send"),
+        )
+
+    async def async_step_sms_code(
+        self, user_input: dict[str, Any] | None = None
+    ) -> config_entries.ConfigFlowResult:
+        """第二步：填验证码，点提交完成登录。"""
+        errors: dict[str, str] = {}
+        detail = ""
+        client = self._relogin
+
+        if client is None:
+            errors["base"] = ERROR_SESSION_EXPIRED
+        elif user_input is not None:
+            code = str(user_input.get(CONF_VERIFYCODE, "")).strip()
+            if not code:
+                errors["base"] = ERROR_CODE_REQUIRED
+            else:
+                try:
+                    passed = await client.async_verify_code(code)
+                    if not passed:
+                        raise ReloginRejected("验证码未通过")
+                    bduss = await client.async_exchange_bduss()
+                except ReloginRejected:
+                    errors["base"] = ERROR_LOGIN_FAILED
+                    detail = "验证码不正确或已过期，请重新输入。"
+                except ReloginNeedsCode as exc:
+                    errors["base"] = ERROR_CODE_REQUIRED
+                    detail = str(exc)
+                except ReloginError as exc:
+                    _LOGGER.warning("%s换取 BDUSS 失败: %s", "", exc)
+                    if "120018" in str(exc):
+                        errors["base"] = ERROR_SESSION_EXPIRED
+                        detail = "验证会话已过期，请重新登录。"
+                    else:
+                        errors["base"] = ERROR_LOGIN_BLOCKED
+                        detail = str(exc)
+                except Exception:  # noqa: BLE001
+                    _LOGGER.exception("%s提交验证码出现未预期异常", "")
+                    errors["base"] = ERROR_UNKNOWN
+                else:
+                    self._cookie = bduss
+                    if self._reauth_entry is not None:
+                        return await self._finish_reauth()
+                    return await self._after_auth()
+
+        return self.async_show_form(
+            step_id="sms_code",
+            data_schema=vol.Schema({vol.Required(CONF_VERIFYCODE): str}),
+            errors=errors,
+            description_placeholders=self._sms_placeholders(detail, stage="code"),
         )
 
     async def _finish_reauth(self) -> config_entries.ConfigFlowResult:
@@ -568,9 +589,13 @@ class XiaoDuReverseOptionsFlow(config_entries.OptionsFlow):
         """距离可以重新发送还剩多少秒（0 表示现在就能发）。"""
         return _sms_wait_seconds(self._sms_sent_at)
 
-    def _sms_placeholders(self, detail: str = "") -> dict[str, str]:
+    def _sms_placeholders(
+        self, detail: str = "", stage: str = "send"
+    ) -> dict[str, str]:
         """拼出短信步骤的描述占位符。"""
-        return _build_sms_placeholders(self._sms_sent_at, self._mobile, detail)
+        return _build_sms_placeholders(
+            self._sms_sent_at, self._mobile, detail, stage
+        )
 
     async def _save_cookie(
         self, bduss: str, username: str, password: str, baiduid: str
@@ -614,6 +639,9 @@ class XiaoDuReverseOptionsFlow(config_entries.OptionsFlow):
             except ReloginError as exc:
                 _LOGGER.warning("Options 重新登录失败: %s", exc)
                 errors["base"] = ERROR_LOGIN_BLOCKED
+            except Exception:  # noqa: BLE001
+                _LOGGER.exception("Options 重新登录出现未预期异常")
+                errors["base"] = ERROR_UNKNOWN
             else:
                 if bduss:
                     return await self._save_cookie(
@@ -651,94 +679,109 @@ class XiaoDuReverseOptionsFlow(config_entries.OptionsFlow):
     async def async_step_sms(
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.ConfigFlowResult:
-        """发送/重发验证码，或提交验证码完成登录。"""
+        """第一步：发送验证码（点提交即发送）。"""
         errors: dict[str, str] = {}
         detail = ""
         client = self._relogin
 
         if client is not None and not self._mobile and client.mobile:
-            # 登录步骤里没取到就再补一次，避免只显示占位文案
+            # 登录步骤里没取到就再补一次
             self._mobile = client.mobile
+
         if client is None:
             errors["base"] = ERROR_SESSION_EXPIRED
         elif user_input is not None:
-            action = str(user_input.get(CONF_ACTION) or SMS_ACTION_SEND)
-            code = str(user_input.get(CONF_VERIFYCODE, "")).strip()
             wait = self._sms_wait()
-
-            if action == SMS_ACTION_SEND:
-                if wait > 0:
-                    errors["base"] = ERROR_RESEND_TOO_SOON
-                    detail = f"请等待 {wait} 秒后再重新发送。"
-                else:
-                    try:
-                        result = await client.async_send_code()
-                    except ReloginError as exc:
-                        _LOGGER.warning("Options 短信下发失败: %s", exc)
-                        errors["base"] = ERROR_SMS_FAILED
-                        detail = str(exc)
-                    else:
-                        if (
-                            result.get("send") == "success"
-                            or str(result.get("code")) == "110000"
-                        ):
-                            self._sms_sent_at = time.time()
-                            self._mobile = client.mobile or self._mobile
-                            detail = "验证码已发送，请查收短信。"
-                        else:
-                            errors["base"] = ERROR_SMS_FAILED
-                            detail = f"百度未接受发送请求：{str(result)[:120]}"
+            if wait > 0:
+                errors["base"] = ERROR_RESEND_TOO_SOON
+                detail = f"请等待 {wait} 秒后再发送。"
             else:
-                if not code:
-                    errors["base"] = ERROR_CODE_REQUIRED
+                try:
+                    result = await client.async_send_code()
+                except ReloginError as exc:
+                    _LOGGER.warning("%s短信下发失败: %s", "Options ", exc)
+                    errors["base"] = ERROR_SMS_FAILED
+                    detail = str(exc)
+                except Exception:  # noqa: BLE001
+                    _LOGGER.exception("%s短信下发出现未预期异常", "Options ")
+                    errors["base"] = ERROR_UNKNOWN
                 else:
-                    try:
-                        passed = await client.async_verify_code(code)
-                        if not passed:
-                            raise ReloginRejected("验证码未通过")
-                        bduss = await client.async_exchange_bduss()
-                    except ReloginRejected:
-                        errors["base"] = ERROR_LOGIN_FAILED
-                        detail = "验证码不正确或已过期，请重新输入。"
-                    except ReloginNeedsCode as exc:
-                        errors["base"] = ERROR_CODE_REQUIRED
-                        detail = str(exc)
-                    except ReloginError as exc:
-                        _LOGGER.warning("Options 换取 BDUSS 失败: %s", exc)
-                        if "120018" in str(exc):
-                            errors["base"] = ERROR_SESSION_EXPIRED
-                            detail = "验证会话已过期，请返回重新登录。"
-                        else:
-                            errors["base"] = ERROR_LOGIN_BLOCKED
-                            detail = str(exc)
-                    else:
-                        return await self._save_cookie(
-                            bduss,
-                            self._pending_username,
-                            self._pending_password,
-                            self._pending_baiduid,
+                    if (
+                        result.get("send") == "success"
+                        or str(result.get("code")) == "110000"
+                    ):
+                        self._sms_sent_at = time.time()
+                        return await self.async_step_sms_code()
+                    errors["base"] = ERROR_SMS_FAILED
+                    code = str(result.get("code") or "")
+                    msg = str(result.get("message") or "")
+                    if code in ("110001", "810010"):
+                        # 实测：服务器发起的 120021 会话，验证控件恒返回参数错误
+                        detail = (
+                            f"百度拒绝了服务器发起的短信验证（{code} {msg}）。"
+                            "这条路径目前走不通，请改用「更新 BDUSS Cookie」方式。"
                         )
+                    else:
+                        detail = f"百度未接受发送请求：{str(result)[:160]}"
 
         return self.async_show_form(
             step_id="sms",
-            data_schema=vol.Schema(
-                {
-                    vol.Optional(CONF_VERIFYCODE, default=""): str,
-                    vol.Required(
-                        CONF_ACTION,
-                        default=(
-                            SMS_ACTION_SUBMIT if self._sms_sent_at else SMS_ACTION_SEND
-                        ),
-                    ): vol.In(
-                        {
-                            SMS_ACTION_SEND: "发送验证码",
-                            SMS_ACTION_SUBMIT: "确定，完成登录",
-                        }
-                    ),
-                }
-            ),
+            data_schema=vol.Schema({}),
             errors=errors,
-            description_placeholders=self._sms_placeholders(detail),
+            description_placeholders=self._sms_placeholders(detail, stage="send"),
+        )
+
+    async def async_step_sms_code(
+        self, user_input: dict[str, Any] | None = None
+    ) -> config_entries.ConfigFlowResult:
+        """第二步：填验证码，点提交完成登录。"""
+        errors: dict[str, str] = {}
+        detail = ""
+        client = self._relogin
+
+        if client is None:
+            errors["base"] = ERROR_SESSION_EXPIRED
+        elif user_input is not None:
+            code = str(user_input.get(CONF_VERIFYCODE, "")).strip()
+            if not code:
+                errors["base"] = ERROR_CODE_REQUIRED
+            else:
+                try:
+                    passed = await client.async_verify_code(code)
+                    if not passed:
+                        raise ReloginRejected("验证码未通过")
+                    bduss = await client.async_exchange_bduss()
+                except ReloginRejected:
+                    errors["base"] = ERROR_LOGIN_FAILED
+                    detail = "验证码不正确或已过期，请重新输入。"
+                except ReloginNeedsCode as exc:
+                    errors["base"] = ERROR_CODE_REQUIRED
+                    detail = str(exc)
+                except ReloginError as exc:
+                    _LOGGER.warning("%s换取 BDUSS 失败: %s", "Options ", exc)
+                    if "120018" in str(exc):
+                        errors["base"] = ERROR_SESSION_EXPIRED
+                        detail = "验证会话已过期，请重新登录。"
+                    else:
+                        errors["base"] = ERROR_LOGIN_BLOCKED
+                        detail = str(exc)
+                except Exception:  # noqa: BLE001
+                    _LOGGER.exception("%s提交验证码出现未预期异常", "Options ")
+                    errors["base"] = ERROR_UNKNOWN
+                else:
+                    self._cookie = bduss
+                    return await self._save_cookie(
+                        bduss,
+                        self._pending_username,
+                        self._pending_password,
+                        self._pending_baiduid,
+                    )
+
+        return self.async_show_form(
+            step_id="sms_code",
+            data_schema=vol.Schema({vol.Required(CONF_VERIFYCODE): str}),
+            errors=errors,
+            description_placeholders=self._sms_placeholders(detail, stage="code"),
         )
 
     async def async_step_cookie(

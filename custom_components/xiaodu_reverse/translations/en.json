@@ -39,11 +39,15 @@
         }
       },
       "sms": {
-        "title": "SMS verification",
-        "description": "Baidu requires SMS verification. The code is sent to {mobile}.\n\n{detail}",
+        "title": "Send verification code",
+        "description": "Baidu requires SMS verification.\n\n{detail}",
+        "data": {}
+      },
+      "sms_code": {
+        "title": "Enter verification code",
+        "description": "{detail}\n\nThe code is only used for this login.",
         "data": {
-          "verifycode": "SMS code",
-          "action": "Action"
+          "verifycode": "SMS code"
         }
       }
     },
@@ -111,11 +115,15 @@
         }
       },
       "sms": {
-        "title": "SMS verification",
-        "description": "Baidu requires SMS verification. The code is sent to {mobile}.\n\n{detail}",
+        "title": "Send verification code",
+        "description": "Baidu requires SMS verification.\n\n{detail}",
+        "data": {}
+      },
+      "sms_code": {
+        "title": "Enter verification code",
+        "description": "{detail}\n\nThe code is only used for this login.",
         "data": {
-          "verifycode": "SMS code",
-          "action": "Action"
+          "verifycode": "SMS code"
         }
       }
     },
