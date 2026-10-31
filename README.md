@@ -188,15 +188,21 @@ custom_components/xiaodu_reverse/
 
 完整说明见 [Releases](https://github.com/helloArmy/ha-xiaodu-reverse/releases)。
 
-> 只有最新版本保持展开，每发一个新版本就把上一版折叠起来。
+### v1.3.5（2026-10-31）· 实测支持 Home Assistant 2024.1.0
 
-### v1.3.4（2026-10-31）· 支持 Home Assistant 2024.1.0 及以上
+- **`ConfigEntry` 泛型降级** — `ConfigEntry[XiaoDuCoordinator]` 是 2024.6 才支持的写法，在 2024.1~2024.5 会抛 `TypeError: type 'ConfigEntry' is not subscriptable`，且发生在模块顶层，导致**整个集成导入失败、条目完全无法 setup**。这才是原先版本号写 `2024.6.0` 的真正原因。改为 `try/except` 探测后降级为非泛型
+- **在真实 2024.1.0 容器（Python 3.11.6）上端到端实测** — 17/17 模块导入、条目 setup 成功、读到真实状态（窗帘 `degree=50 ON`）、控制 50%→30% 16 秒到位，无任何 Traceback；同时复测 HA 2026.1.3 全部通过
+- **品牌图标换成小度官方图标** — 由此前的自制紫底字标改为小度官方 App 图标（红蓝气泡），并新增 `dark_icon.png` 深色主题版本
+
+<details>
+<summary>v1.3.4（2026-10-31）· 支持 Home Assistant 2024.1.0 及以上</summary>
 
 - **最低版本定为 `2024.1.0`** — `hacs.json` 同步；HAOS / Supervised / Container / Core 四种安装形态均可用
 - **吸尘器状态跨版本自适应** — HA 2025.1 起改用 `activity` 属性 + `VacuumActivity` 枚举，2024.x 只认 `state` 字符串。原来在模块级直接 `from ... import VacuumActivity`，在 2024.x 上会 ImportError 并连带整个条目 setup 失败。改为 `try/except` 探测后按版本挂载对应属性（两个属性语义互斥，只挂其一）
 - **选项流程跨版本自适应** — `OptionsFlow.config_entry` 是 2024.11 才由框架注入的只读属性；更早版本拿不到。改为运行时探测该 property 是否存在，不存在时在 `__init__` 里自行注入
 - **`ConfigEntry` 泛型降级** — `ConfigEntry[XiaoDuCoordinator]` 是 2024.6 才支持的写法，在 2024.1~2024.5 会 `TypeError: type 'ConfigEntry' is not subscriptable`，导致**整个集成导入失败**（这也是原先版本号写 2024.6.0 的真正原因）。改为 `try/except` 探测后降级为非泛型
-- **README 新增「环境要求」章节** — 列出 HA 版本、安装形态、Python、网络与依赖要求，并附跨版本兼容对照表
+
+</details>
 
 <details>
 <summary>v1.3.3（2026-10-31）· 修复验证控件 810010 / 110001</summary>
@@ -239,10 +245,9 @@ custom_components/xiaodu_reverse/
 </details>
 
 <details>
-<summary>v1.2.1（2026-10-31）· README 与 manifest 修正</summary>
+<summary>v1.2.1（2026-10-31）· 修正 HACS 页面上的链接</summary>
 
-- **README 补全版本记录** — 新增「更新日志」与「实测验证」章节，逐版本记录变更与实机诊断结论，顶部增加 Release / HACS / HA 版本徽章
-- **修正 manifest 链接** — `documentation` 与 `issue_tracker` 从占位地址 `https://github.com/` 改为真实仓库链接，此前 HACS 页面上这两个链接是坏的
+- **修正 HACS 页面上的文档与问题反馈链接** — 此前指向占位地址 `https://github.com/`，点了没反应；现指向真实仓库
 
 </details>
 
