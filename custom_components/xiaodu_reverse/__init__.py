@@ -46,7 +46,12 @@ PLATFORMS: list[Platform] = [
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
-XiaoDuConfigEntry = ConfigEntry[XiaoDuCoordinator]
+try:
+    # HA 2024.6 起 ConfigEntry 支持泛型，可标注入 runtime_data 的类型
+    XiaoDuConfigEntry = ConfigEntry[XiaoDuCoordinator]
+except TypeError:
+    # HA 2024.1 ~ 2024.5：ConfigEntry 不可下标，退回非泛型
+    XiaoDuConfigEntry = ConfigEntry  # type: ignore[misc,assignment]
 
 
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:

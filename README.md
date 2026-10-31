@@ -32,10 +32,11 @@
 
 **跨版本兼容说明**：HA 2024.1 到当前版本之间有若干核心 API 发生变更，集成内已按版本自适应，无需你手动处理：
 
-| 能力 | 2024.1 ~ 2024.10 | 2024.11+ | 2025.1+ |
-|---|---|---|---|
-| 吸尘器状态 | `state` 字符串 | `state` 字符串 | `activity` + `VacuumActivity` 枚举 |
-| 选项流程的 config entry | 集成自行注入 | 框架自动注入 | 框架自动注入 |
+| 能力 | 2024.1 ~ 2024.5 | 2024.6 ~ 2024.10 | 2024.11+ | 2025.1+ |
+|---|---|---|---|---|
+| `ConfigEntry` 泛型 | 不支持，退回非泛型 | 支持 | 支持 | 支持 |
+| 吸尘器状态 | `state` 字符串 | `state` 字符串 | `state` 字符串 | `activity` + `VacuumActivity` 枚举 |
+| 选项流程的 config entry | 集成自行注入 | 集成自行注入 | 框架自动注入 | 框架自动注入 |
 
 其余用到的接口（`CoverEntityFeature`、`ClimateEntityFeature`、`ColorMode`、`SensorDeviceClass` 等）在 2024.1 时已存在，且均采用 `getattr` 容错构造，不会因后续版本增删成员而导入失败。
 
@@ -194,6 +195,7 @@ custom_components/xiaodu_reverse/
 - **最低版本定为 `2024.1.0`** — `hacs.json` 同步；HAOS / Supervised / Container / Core 四种安装形态均可用
 - **吸尘器状态跨版本自适应** — HA 2025.1 起改用 `activity` 属性 + `VacuumActivity` 枚举，2024.x 只认 `state` 字符串。原来在模块级直接 `from ... import VacuumActivity`，在 2024.x 上会 ImportError 并连带整个条目 setup 失败。改为 `try/except` 探测后按版本挂载对应属性（两个属性语义互斥，只挂其一）
 - **选项流程跨版本自适应** — `OptionsFlow.config_entry` 是 2024.11 才由框架注入的只读属性；更早版本拿不到。改为运行时探测该 property 是否存在，不存在时在 `__init__` 里自行注入
+- **`ConfigEntry` 泛型降级** — `ConfigEntry[XiaoDuCoordinator]` 是 2024.6 才支持的写法，在 2024.1~2024.5 会 `TypeError: type 'ConfigEntry' is not subscriptable`，导致**整个集成导入失败**（这也是原先版本号写 2024.6.0 的真正原因）。改为 `try/except` 探测后降级为非泛型
 - **README 新增「环境要求」章节** — 列出 HA 版本、安装形态、Python、网络与依赖要求，并附跨版本兼容对照表
 
 <details>
