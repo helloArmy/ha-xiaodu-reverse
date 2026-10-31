@@ -87,7 +87,7 @@ def _build_sms_placeholders(
         hint = (
             f"验证码将发送至{mobile}。点击下方提交按钮发送。"
             if mobile
-            else "点击下方提交按钮，向百度请求发送短信验证码。"
+            else "点击下方提交按钮，向百度发送短信验证码（将发到你百度账号绑定的手机）。"
         )
     elif wait > 0:
         hint = f"验证码已发送至{who}，{wait} 秒后可重新发送。"
@@ -226,9 +226,9 @@ class XiaoDuReverseConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     self._mobile_tried = False
                     try:
                         await client.async_get_methods()
-                        self._mobile = client.mobile
-                    except ReloginError as exc:
-                        _LOGGER.debug("查询验证方式失败（不影响后续）: %s", exc)
+                        self._mobile = client.mobile or ""
+                    except Exception as exc:  # noqa: BLE001
+                        _LOGGER.warning("查询验证方式失败（不影响后续）: %s", exc)
                     return await self.async_step_sms()
 
         return self.async_show_form(
@@ -668,9 +668,9 @@ class XiaoDuReverseOptionsFlow(config_entries.OptionsFlow):
                 self._mobile_tried = False
                 try:
                     await client.async_get_methods()
-                    self._mobile = client.mobile
-                except ReloginError as exc:
-                    _LOGGER.debug("查询验证方式失败（不影响后续）: %s", exc)
+                    self._mobile = client.mobile or ""
+                except Exception as exc:  # noqa: BLE001
+                    _LOGGER.warning("查询验证方式失败（不影响后续）: %s", exc)
                 return await self.async_step_sms()
 
         return self.async_show_form(

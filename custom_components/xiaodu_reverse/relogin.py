@@ -599,15 +599,8 @@ class BaiduRelogin:
         _LOGGER.debug("widget %s 返回: %s", action, text[:200])
         return _strip_jsonp(text)
 
-    async def async_get_methods(self) -> dict[str, Any]:
-        """查询可用验证方式，顺便记下脱敏手机号。"""
-        result = await self._widget_form(
-            "get",
-            supportThirdList=["google", "twitter"],
-            upsms_tel="",
-            dxmAuth=0,
-            clientPasskeysEnable=0,
-        )
+    def _parse_methods(self, result: dict[str, Any]) -> None:
+        """从验证方式响应里解析 authField/authType 与脱敏手机号。"""
         data = result.get("data") or {}
         info = data.get("defaultMethodInfo") or {}
         # authwidget.js: var i = defaultMethodInfo.field, a = defaultMethodInfo.type
@@ -615,17 +608,55 @@ class BaiduRelogin:
             self.auth_field = str(info["field"])
         if info.get("type"):
             self.auth_type = str(info["type"])
-        # 脱敏手机号在 methodsInfo[].methods.mobile.info.mobile，如 "177********"
+        if self.mobile:
+            return
+        # 号码可能出现在三处，按可靠性依次取：
+        #   methodsInfo[].methods.mobile.info.mobile  （实测主位置）
+        #   methodsInfo[].text.mobile                 （同值，备用）
+        #   defaultMethodInfo.mobile / data.mobile    （旧结构）
         for method in data.get("methodsInfo") or []:
             mobile_info = (
                 ((method.get("methods") or {}).get("mobile") or {}).get("info") or {}
             )
             if mobile_info.get("mobile"):
                 self.mobile = str(mobile_info["mobile"])
+                return
+            text_info = method.get("text") or {}
+            if isinstance(text_info, dict) and text_info.get("mobile"):
+                self.mobile = str(text_info["mobile"])
+                return
+        for candidate in (info.get("mobile"), info.get("showMobile"), data.get("mobile")):
+            if candidate:
+                self.mobile = str(candidate)
+                return
+
+    async def async_get_methods(self, *, retries: int = 2) -> dict[str, Any]:
+        """查询可用验证方式，顺便记下脱敏手机号。
+
+        实测这个方法接口偶发返回 ``code=110000`` 但 ``methodsInfo`` 为空
+        （刚下发 authid 后立刻查询时更容易出现），所以拿不到号码时重试一次。
+        """
+        async def once() -> dict[str, Any]:
+            return await self._widget_form(
+                "get",
+                supportThirdList=["google", "twitter"],
+                upsms_tel="",
+                dxmAuth=0,
+                clientPasskeysEnable=0,
+            )
+
+        result = await once()
+        self._parse_methods(result)
+        for _ in range(max(retries - 1, 0)):
+            if self.mobile:
                 break
+            await asyncio.sleep(1.5)
+            result = await once()
+            self._parse_methods(result)
         if not self.mobile:
-            self.mobile = str(
-                info.get("mobile") or info.get("showMobile") or data.get("mobile") or ""
+            _LOGGER.debug(
+                "验证方式响应里没有手机号: %.400s",
+                json.dumps(result.get("data") or {}, ensure_ascii=False),
             )
         return result
 
