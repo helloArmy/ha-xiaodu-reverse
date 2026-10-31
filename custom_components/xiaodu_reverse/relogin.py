@@ -630,7 +630,7 @@ class BaiduRelogin:
                 self.mobile = str(candidate)
                 return
 
-    async def async_get_methods(self, *, retries: int = 2) -> dict[str, Any]:
+    async def async_get_methods(self, *, retries: int = 3) -> dict[str, Any]:
         """查询可用验证方式，顺便记下脱敏手机号。
 
         实测这个方法接口偶发返回 ``code=110000`` 但 ``methodsInfo`` 为空
@@ -645,18 +645,23 @@ class BaiduRelogin:
                 clientPasskeysEnable=0,
             )
 
+        # 间隔递增：接口在「系统繁忙」(810010) 时立刻重试没有意义，
+        # 需要给它几秒缓冲；实测同账号并发登录也会导致 810010。
+        delays = (2.0, 5.0, 8.0)
         result = await once()
         self._parse_methods(result)
-        for _ in range(max(retries - 1, 0)):
+        for delay in delays[: max(retries - 1, 0)]:
             if self.mobile:
                 break
-            await asyncio.sleep(1.5)
+            await asyncio.sleep(delay)
             result = await once()
             self._parse_methods(result)
         if not self.mobile:
-            _LOGGER.debug(
-                "验证方式响应里没有手机号: %.400s",
-                json.dumps(result.get("data") or {}, ensure_ascii=False),
+            # 用 warning 级别，确保拿不到号码时能从日志看到接口原始返回
+            _LOGGER.warning(
+                "验证方式响应里没有手机号 (code=%s): %s",
+                result.get("code"),
+                json.dumps(result.get("data") or {}, ensure_ascii=False)[:600],
             )
         return result
 

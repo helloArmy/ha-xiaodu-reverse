@@ -33,6 +33,7 @@ from .const import (
     CONF_HOUSE_ID,
     CONF_HOUSE_NAME,
     CONF_LOGIN_MODE,
+    CONF_MOBILE,
     CONF_PASSWORD,
     CONF_SCAN_INTERVAL,
     CONF_USERNAME,
@@ -266,15 +267,17 @@ class XiaoDuReverseConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         detail = ""
         client = self._relogin
 
-        if client is not None and not self._mobile and not self._mobile_tried:
-            # 登录步骤里没取到（或查询失败）就在这里补一次，此时会话更新鲜。
-            # 每个流程只补一次，避免发送失败重渲染时反复请求。
+        if client is not None and not self._mobile_tried:
+            # 每个流程只查一次，避免发送失败重渲染时反复请求。
+            # 已有缓存号码时只查一次就返回，免得为了刷新号码卡十几秒；
+            # 没有缓存才多重试几次。
             self._mobile_tried = True
             try:
-                await client.async_get_methods()
+                await client.async_get_methods(retries=1 if self._mobile else 3)
             except Exception as exc:  # noqa: BLE001
                 _LOGGER.warning("查询验证方式失败（不影响发码）: %s", exc)
-            self._mobile = client.mobile or ""
+            if client.mobile:
+                self._mobile = client.mobile       # 查到的新值优先
             if not self._mobile:
                 _LOGGER.warning("未能取得脱敏手机号，验证方式接口未返回 mobile 字段")
 
@@ -622,6 +625,9 @@ class XiaoDuReverseOptionsFlow(config_entries.OptionsFlow):
         new_data[CONF_PASSWORD] = password
         new_data[CONF_BAIDUID] = baiduid
         new_data[CONF_LOGIN_MODE] = LOGIN_MODE_PASSWORD
+        if self._mobile:
+            # 记下脱敏号码，下次进短信页时即使查询接口繁忙也能显示
+            new_data[CONF_MOBILE] = self._mobile
         self.hass.config_entries.async_update_entry(self.config_entry, data=new_data)
         self._drop_session()
         await self.hass.config_entries.async_reload(self.config_entry.entry_id)
@@ -664,7 +670,8 @@ class XiaoDuReverseOptionsFlow(config_entries.OptionsFlow):
                     )
                 self._relogin = client
                 self._sms_sent_at = 0.0
-                self._mobile = ""
+                # 先用条目里存的上次号码兜底，查询成功会覆盖
+                self._mobile = str(self.config_entry.data.get(CONF_MOBILE) or "")
                 self._mobile_tried = False
                 try:
                     await client.async_get_methods()
@@ -700,15 +707,17 @@ class XiaoDuReverseOptionsFlow(config_entries.OptionsFlow):
         detail = ""
         client = self._relogin
 
-        if client is not None and not self._mobile and not self._mobile_tried:
-            # 登录步骤里没取到（或查询失败）就在这里补一次，此时会话更新鲜。
-            # 每个流程只补一次，避免发送失败重渲染时反复请求。
+        if client is not None and not self._mobile_tried:
+            # 每个流程只查一次，避免发送失败重渲染时反复请求。
+            # 已有缓存号码时只查一次就返回，免得为了刷新号码卡十几秒；
+            # 没有缓存才多重试几次。
             self._mobile_tried = True
             try:
-                await client.async_get_methods()
+                await client.async_get_methods(retries=1 if self._mobile else 3)
             except Exception as exc:  # noqa: BLE001
                 _LOGGER.warning("查询验证方式失败（不影响发码）: %s", exc)
-            self._mobile = client.mobile or ""
+            if client.mobile:
+                self._mobile = client.mobile       # 查到的新值优先
             if not self._mobile:
                 _LOGGER.warning("未能取得脱敏手机号，验证方式接口未返回 mobile 字段")
 
