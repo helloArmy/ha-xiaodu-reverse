@@ -33,7 +33,6 @@ from .const import (
     CONF_HOUSE_ID,
     CONF_HOUSE_NAME,
     CONF_LOGIN_MODE,
-    CONF_MOBILE,
     CONF_PASSWORD,
     CONF_SCAN_INTERVAL,
     CONF_USERNAME,
@@ -224,12 +223,8 @@ class XiaoDuReverseConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     self._relogin = client
                     self._sms_sent_at = 0.0
                     self._mobile = ""
-                    self._mobile_tried = False
-                    try:
-                        await client.async_get_methods()
-                        self._mobile = client.mobile or ""
-                    except Exception as exc:  # noqa: BLE001
-                        _LOGGER.warning("查询验证方式失败（不影响后续）: %s", exc)
+                    # 这里不查询手机号：验证流程还没开始，接口容易返回 810010。
+                    # 等用户点了「发送验证码」、流程真正激活后再查（见 async_step_sms）。
                     return await self.async_step_sms()
 
         return self.async_show_form(
@@ -267,20 +262,6 @@ class XiaoDuReverseConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         detail = ""
         client = self._relogin
 
-        if client is not None and not self._mobile_tried:
-            # 每个流程只查一次，避免发送失败重渲染时反复请求。
-            # 已有缓存号码时只查一次就返回，免得为了刷新号码卡十几秒；
-            # 没有缓存才多重试几次。
-            self._mobile_tried = True
-            try:
-                await client.async_get_methods(retries=1 if self._mobile else 3)
-            except Exception as exc:  # noqa: BLE001
-                _LOGGER.warning("查询验证方式失败（不影响发码）: %s", exc)
-            if client.mobile:
-                self._mobile = client.mobile       # 查到的新值优先
-            if not self._mobile:
-                _LOGGER.warning("未能取得脱敏手机号，验证方式接口未返回 mobile 字段")
-
         if client is None:
             errors["base"] = ERROR_SESSION_EXPIRED
         elif user_input is not None:
@@ -299,11 +280,20 @@ class XiaoDuReverseConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     _LOGGER.exception("%s短信下发出现未预期异常", "")
                     errors["base"] = ERROR_UNKNOWN
                 else:
+                    process = (result.get("data") or {}).get("processRes") or {}
                     if (
-                        result.get("send") == "success"
+                        process.get("send") == "success"
+                        or result.get("send") == "success"
                         or str(result.get("code")) == "110000"
                     ):
                         self._sms_sent_at = time.time()
+                        # 发送成功后验证流程才真正激活，此时查询能稳定拿到脱敏号码
+                        try:
+                            await client.async_get_methods(retries=3)
+                            if client.mobile:
+                                self._mobile = client.mobile
+                        except Exception as exc:  # noqa: BLE001
+                            _LOGGER.warning("发送后查询验证方式失败: %s", exc)
                         return await self.async_step_sms_code()
                     errors["base"] = ERROR_SMS_FAILED
                     code = str(result.get("code") or "")
@@ -625,9 +615,6 @@ class XiaoDuReverseOptionsFlow(config_entries.OptionsFlow):
         new_data[CONF_PASSWORD] = password
         new_data[CONF_BAIDUID] = baiduid
         new_data[CONF_LOGIN_MODE] = LOGIN_MODE_PASSWORD
-        if self._mobile:
-            # 记下脱敏号码，下次进短信页时即使查询接口繁忙也能显示
-            new_data[CONF_MOBILE] = self._mobile
         self.hass.config_entries.async_update_entry(self.config_entry, data=new_data)
         self._drop_session()
         await self.hass.config_entries.async_reload(self.config_entry.entry_id)
@@ -670,14 +657,8 @@ class XiaoDuReverseOptionsFlow(config_entries.OptionsFlow):
                     )
                 self._relogin = client
                 self._sms_sent_at = 0.0
-                # 先用条目里存的上次号码兜底，查询成功会覆盖
-                self._mobile = str(self.config_entry.data.get(CONF_MOBILE) or "")
-                self._mobile_tried = False
-                try:
-                    await client.async_get_methods()
-                    self._mobile = client.mobile or ""
-                except Exception as exc:  # noqa: BLE001
-                    _LOGGER.warning("查询验证方式失败（不影响后续）: %s", exc)
+                self._mobile = ""
+                # 验证流程尚未开始，这里查询易返 810010；等发送验证码后再查
                 return await self.async_step_sms()
 
         return self.async_show_form(
@@ -707,20 +688,6 @@ class XiaoDuReverseOptionsFlow(config_entries.OptionsFlow):
         detail = ""
         client = self._relogin
 
-        if client is not None and not self._mobile_tried:
-            # 每个流程只查一次，避免发送失败重渲染时反复请求。
-            # 已有缓存号码时只查一次就返回，免得为了刷新号码卡十几秒；
-            # 没有缓存才多重试几次。
-            self._mobile_tried = True
-            try:
-                await client.async_get_methods(retries=1 if self._mobile else 3)
-            except Exception as exc:  # noqa: BLE001
-                _LOGGER.warning("查询验证方式失败（不影响发码）: %s", exc)
-            if client.mobile:
-                self._mobile = client.mobile       # 查到的新值优先
-            if not self._mobile:
-                _LOGGER.warning("未能取得脱敏手机号，验证方式接口未返回 mobile 字段")
-
         if client is None:
             errors["base"] = ERROR_SESSION_EXPIRED
         elif user_input is not None:
@@ -739,11 +706,20 @@ class XiaoDuReverseOptionsFlow(config_entries.OptionsFlow):
                     _LOGGER.exception("%s短信下发出现未预期异常", "Options ")
                     errors["base"] = ERROR_UNKNOWN
                 else:
+                    process = (result.get("data") or {}).get("processRes") or {}
                     if (
-                        result.get("send") == "success"
+                        process.get("send") == "success"
+                        or result.get("send") == "success"
                         or str(result.get("code")) == "110000"
                     ):
                         self._sms_sent_at = time.time()
+                        # 发送成功后验证流程才真正激活，此时查询能稳定拿到脱敏号码
+                        try:
+                            await client.async_get_methods(retries=3)
+                            if client.mobile:
+                                self._mobile = client.mobile
+                        except Exception as exc:  # noqa: BLE001
+                            _LOGGER.warning("发送后查询验证方式失败: %s", exc)
                         return await self.async_step_sms_code()
                     errors["base"] = ERROR_SMS_FAILED
                     code = str(result.get("code") or "")
