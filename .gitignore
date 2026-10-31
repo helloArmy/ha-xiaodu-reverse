@@ -17,6 +17,9 @@ ref-hass-xiaodu/
 .DS_Store
 Thumbs.db
 
+# WorkBuddy 工作区记忆/项目数据（仅本地，不同步到远端）
+.workbuddy/
+
 # 本地工具与临时凭据（绝不提交）
 .tools/
 *.token
