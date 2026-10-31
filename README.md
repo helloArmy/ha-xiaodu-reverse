@@ -36,7 +36,20 @@
 
 ## 安装
 
-### 方式一：手动（推荐，最快）
+### 方式一：HACS 一键打开（推荐）
+
+[![在 HACS 中打开](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=helloArmy&repository=ha-xiaodu-reverse&category=integration)
+
+> 本集成尚未进入 HACS 默认仓库，所以**首次**仍要先按「方式二」添加一次自定义存储库；
+> 添加之后这个按钮就能直接在 HACS 里打开本集成页面，后续安装 / 更新都走它。
+
+### 方式二：HACS 添加自定义存储库
+
+1. HACS → 集成 → 右上角 ⋮ → 自定义存储库
+2. 填入 `https://github.com/helloArmy/ha-xiaodu-reverse`，类别选「集成」
+3. 搜索「小度反向接入」→ 安装 → 重启 Home Assistant
+
+### 方式三：手动复制文件（最快，适合调试）
 
 把 `custom_components/xiaodu_reverse` 整个目录复制到 HA 配置目录：
 
@@ -45,12 +58,6 @@
 ```
 
 然后**重启 Home Assistant**。
-
-### 方式二：HACS 自定义仓库
-
-1. HACS → 集成 → 右上角 ⋮ → 自定义存储库
-2. 填入本仓库地址，类别选「集成」
-3. 搜索「小度反向接入」安装，重启 HA
 
 ## 配置
 
