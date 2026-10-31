@@ -123,17 +123,14 @@ class XiaoDuReverseConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     # ── session helpers ────────────────────────────────────────────────
 
     def _get_session(self) -> aiohttp.ClientSession:
-        """Return this flow's dedicated session.
+        """Return this flow's dedicated session (never the shared one).
 
-        刻意不使用 ``async_create_clientsession``：它会复用 HA 共享的
-        connector 与 SSL 上下文，实测在登录后的「验证方式查询」上稳定返回
-        ``810010（系统繁忙）``；而用完全独立的 session 发同样的请求
-        （同账号、同参数、同一分钟）返回 ``110000`` 并能带出脱敏手机号。
+        注意：这里必须用 ``async_create_clientsession``。自建
+        ``aiohttp.ClientSession`` 看似等价，但实测会让验证控件请求退回
+        ``110001 参数错误``（会话 cookie 的传递方式与它不同）。
         """
         if self._session is None or self._session.closed:
-            self._session = aiohttp.ClientSession(
-                cookie_jar=aiohttp.CookieJar(unsafe=True)
-            )
+            self._session = async_create_clientsession(self.hass)
         return self._session
 
     def _drop_session(self) -> None:
@@ -142,8 +139,6 @@ class XiaoDuReverseConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     def async_remove(self) -> None:
         """Release the per-flow session when the flow ends."""
-        if self._session is not None and not self._session.closed:
-            self.hass.async_create_task(self._session.close())
         self._session = None
 
     @staticmethod
@@ -277,7 +272,7 @@ class XiaoDuReverseConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             # 每个流程只查一次，发送失败重渲染时不再重复请求。
             self._mobile_tried = True
             try:
-                await client.async_get_methods(retries=3)
+                await client.async_get_methods(retries=1)
                 if client.mobile:
                     self._mobile = client.mobile
             except Exception as exc:  # noqa: BLE001
@@ -313,7 +308,7 @@ class XiaoDuReverseConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         if not self._mobile:
                             # 进页面时没拿到，发送后再补一次（此时流程已激活）
                             try:
-                                await client.async_get_methods(retries=2)
+                                await client.async_get_methods(retries=1)
                                 if client.mobile:
                                     self._mobile = client.mobile
                             except Exception as exc:  # noqa: BLE001
@@ -585,15 +580,9 @@ class XiaoDuReverseOptionsFlow(config_entries.OptionsFlow):
         self._pending_baiduid: str = ""
 
     def _get_session(self) -> aiohttp.ClientSession:
-        """Return the options flow's dedicated session.
-
-        同 ConfigFlow：不用 ``async_create_clientsession``，避免共享 connector
-        与 SSL 上下文导致验证方式查询返回 ``810010``。
-        """
+        """Return the options flow's dedicated session."""
         if self._session is None or self._session.closed:
-            self._session = aiohttp.ClientSession(
-                cookie_jar=aiohttp.CookieJar(unsafe=True)
-            )
+            self._session = async_create_clientsession(self.hass)
         return self._session
 
     def _drop_session(self) -> None:
@@ -602,8 +591,6 @@ class XiaoDuReverseOptionsFlow(config_entries.OptionsFlow):
 
     def async_remove(self) -> None:
         """Release the per-flow session."""
-        if self._session is not None and not self._session.closed:
-            self.hass.async_create_task(self._session.close())
         self._session = None
 
     async def async_step_init(
@@ -725,7 +712,7 @@ class XiaoDuReverseOptionsFlow(config_entries.OptionsFlow):
             # 每个流程只查一次，发送失败重渲染时不再重复请求。
             self._mobile_tried = True
             try:
-                await client.async_get_methods(retries=3)
+                await client.async_get_methods(retries=1)
                 if client.mobile:
                     self._mobile = client.mobile
             except Exception as exc:  # noqa: BLE001
@@ -761,7 +748,7 @@ class XiaoDuReverseOptionsFlow(config_entries.OptionsFlow):
                         if not self._mobile:
                             # 进页面时没拿到，发送后再补一次（此时流程已激活）
                             try:
-                                await client.async_get_methods(retries=2)
+                                await client.async_get_methods(retries=1)
                                 if client.mobile:
                                     self._mobile = client.mobile
                             except Exception as exc:  # noqa: BLE001
