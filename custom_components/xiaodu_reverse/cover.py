@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any
 
 from homeassistant.components.cover import (
-    ATTR_POSITION,
     CoverDeviceClass,
     CoverEntity,
     CoverEntityFeature,
@@ -53,6 +53,11 @@ class XiaoDuCover(XiaoDuEntity, CoverEntity):
     _attr_has_entity_name = True
     _attr_device_class = CoverDeviceClass.CURTAIN
 
+    # Ble-mesh curtains (botId=__ble_mesh__, proxied through a 小度智能屏) take
+    # about 30 s to report their new state. Without follow-up polls the UI
+    # would keep showing the old position until the next scheduled refresh.
+    FOLLOW_UP_REFRESH_DELAYS: tuple[int, ...] = (8, 20, 35)
+
     def __init__(
         self,
         coordinator: XiaoDuCoordinator,
@@ -72,13 +77,16 @@ class XiaoDuCover(XiaoDuEntity, CoverEntity):
 
     @property
     def supported_features(self) -> CoverEntityFeature:
-        """Return the supported cover features."""
-        features = (
+        """Return the supported cover features.
+
+        Position is read-only. Verified on real hardware: XiaoDu curtains
+        reject ``SetPositionRequest`` with ``header name is not vaild``, so
+        exposing SET_POSITION would give the user a slider that does nothing.
+        ``current_position`` still tracks ``degree`` for display.
+        """
+        return (
             CoverEntityFeature.OPEN | CoverEntityFeature.CLOSE | CoverEntityFeature.STOP
         )
-        if self._position_key():
-            features |= CoverEntityFeature.SET_POSITION
-        return features
 
     @property
     def current_cover_position(self) -> int | None:
@@ -104,27 +112,34 @@ class XiaoDuCover(XiaoDuEntity, CoverEntity):
             return None
         return str(on).strip().lower() not in ("on", "open", "opened")
 
+    async def _async_follow_up_refresh(self, delay: float) -> None:
+        """Refresh once after ``delay`` seconds (motor still moving)."""
+        try:
+            await asyncio.sleep(delay)
+            if self.hass is None:
+                return
+            await self.coordinator.async_request_refresh()
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:  # noqa: BLE001
+            _LOGGER.debug("延迟刷新失败: %s", exc)
+
+    def _schedule_follow_up_refresh(self) -> None:
+        """Poll again while the motor finishes travelling."""
+        for delay in self.FOLLOW_UP_REFRESH_DELAYS:
+            self.hass.async_create_task(self._async_follow_up_refresh(delay))
+
     async def async_open_cover(self, **kwargs: Any) -> None:
         """Open the cover."""
         await self.async_send(self._api.async_cover_open())
+        self._schedule_follow_up_refresh()
 
     async def async_close_cover(self, **kwargs: Any) -> None:
         """Close the cover."""
         await self.async_send(self._api.async_cover_close())
+        self._schedule_follow_up_refresh()
 
     async def async_stop_cover(self, **kwargs: Any) -> None:
         """Stop the cover."""
         await self.async_send(self._api.async_cover_stop())
-
-    async def async_set_cover_position(self, **kwargs: Any) -> None:
-        """Move the cover to a position.
-
-        XiaoDu curtains are not uniformly position-capable, so this maps a
-        request to fully-open / fully-closed for anything that is not already
-        the current side of the range.
-        """
-        position = int(kwargs.get(ATTR_POSITION, 0))
-        if position >= 50:
-            await self.async_send(self._api.async_cover_open())
-        else:
-            await self.async_send(self._api.async_cover_close())
+        self._schedule_follow_up_refresh()
