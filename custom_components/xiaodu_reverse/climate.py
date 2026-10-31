@@ -16,6 +16,7 @@ from homeassistant.components.climate import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import ATTR_TEMPERATURE, UnitOfTemperature
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .api import XiaoDuApi, XiaoDuApiError
@@ -238,25 +239,55 @@ class XiaoDuClimate(XiaoDuEntity, ClimateEntity):
         await self.async_send(self._api.async_ac_set_mode(code))
 
     async def async_set_temperature(self, **kwargs: Any) -> None:
-        """Set the target temperature."""
+        """Set the target temperature.
+
+        Field findings on real hardware (HA 2026.10.4, 海信爱家 AC):
+
+        * ``SetTargetTemperatureRequest`` → cloud replies
+          ``header name is not vaild`` — the directive simply does not exist
+          for this device family, so it is only a last-resort fallback;
+        * ``IncrementTemperatureRequest`` / ``DecrementTemperatureRequest`` →
+          accepted, but the device rejects them while powered off
+          ("控制失败，请检查该设备的电源和网络是否正常").
+
+        The ladder is therefore: stepwise nudge → direct set → raise. Never
+        return silently, otherwise the UI shows success while nothing happens.
+        """
         temperature = kwargs.get(ATTR_TEMPERATURE)
         if temperature is None:
             temperature = kwargs.get(ATTR_TARGET_TEMP_LOW)
-        if temperature is None and kwargs.get(ATTR_TARGET_TEMP_HIGH) is None:
-            return
         if temperature is None:
             temperature = kwargs.get(ATTR_TARGET_TEMP_HIGH)
+        if temperature is None:
+            return
         target = self._clamp(float(temperature))
 
-        # Fast path: direct target-temperature directive.
+        # 1) Preferred: stepwise nudge (directive name is accepted by devices).
+        current = self.target_temperature
+        if current is not None:
+            delta = int(round(target - current))
+            if delta == 0:
+                return
+            stepped, step_error = await self._step_towards(delta)
+            if stepped:
+                await self.coordinator.async_request_refresh()
+                return
+
+        # 2) Fallback: direct target-temperature directive.
         try:
-            ok, error = await self._api.async_ac_set_temperature(target)
+            ok, direct_error = await self._api.async_ac_set_temperature(target)
         except XiaoDuApiError as exc:
-            _LOGGER.debug("直接设置温度异常（%s），改用增减指令逼近", exc)
-            ok, error = False, str(exc)
+            ok, direct_error = False, str(exc)
+
         if not ok:
-            _LOGGER.debug("直接设置温度失败（%s），改用增减指令逼近", error)
-            await self._step_towards(target)
+            detail = step_error or direct_error or "未知错误"
+            hint = ""
+            if not self._is_on:
+                hint = "空调当前处于关机状态，多数小度设备会拒绝温度指令，请先开机。"
+            raise HomeAssistantError(
+                f"{self.device_name}: 设定温度失败（{detail}）。{hint}"
+            )
+
         await self.coordinator.async_request_refresh()
 
     def _clamp(self, value: float) -> float:
@@ -264,24 +295,31 @@ class XiaoDuClimate(XiaoDuEntity, ClimateEntity):
         low, high = self._temp_range()
         return max(low, min(high, value))
 
-    async def _step_towards(self, target: float) -> None:
-        """Nudge the setpoint with increment/decrement directives."""
-        current = self.target_temperature
-        if current is None:
-            return
-        delta = int(round(target - current))
-        for _ in range(min(abs(delta), 15)):
+    async def _step_towards(self, delta: float) -> tuple[bool, str | None]:
+        """Nudge the setpoint by ``delta`` degrees.
+
+        Returns ``(moved_ok, error)``. A partially completed nudge still counts
+        as success so the caller reports the real device state instead of
+        pretending the whole move failed.
+        """
+        steps = min(abs(int(round(delta))), 15)
+        if steps == 0:
+            return True, None
+        moved = 0
+        for _ in range(steps):
             try:
                 if delta > 0:
                     ok, err = await self._api.async_ac_increment_temperature()
                 else:
                     ok, err = await self._api.async_ac_decrement_temperature()
             except XiaoDuApiError as exc:
-                _LOGGER.debug("温度逼近失败: %s", exc)
-                return
+                _LOGGER.debug("温度逼近异常: %s", exc)
+                return moved > 0, str(exc)
             if not ok:
                 _LOGGER.debug("温度逼近被拒绝: %s", err)
-                return
+                return moved > 0, str(err)
+            moved += 1
+        return True, None
 
     async def async_set_fan_mode(self, fan_mode: str) -> None:
         """Set the fan speed."""
