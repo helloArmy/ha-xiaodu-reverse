@@ -182,7 +182,9 @@ custom_components/xiaodu_reverse/
 
 完整说明见 [Releases](https://github.com/helloArmy/ha-xiaodu-reverse/releases)。
 
-### v1.3.2（2026-10-31）
+> 只有最新版本保持展开，每发一个新版本就把上一版折叠起来。
+
+### v1.3.2（2026-10-31）· 窗帘支持设定百分比
 
 - **窗帘 / 纱窗支持设定开合百分比** — HA 里现在有位置滑块，`cover.set_cover_position` 可用。关键是找对了指令名：`TurnOnPercentRequest`（`SetPositionRequest`/`SetDegreeRequest`/`SetPercentageRequest` 全被云端 `21098 header name is not vaild` 拒绝）。做法是打开小度 App 的窗帘详情页（本质是网页版 `xiaodu.baidu.com/saiya/smarthome`），通过 WebView 调试通道拖动窗帘图标，抓到真实请求：
   ```json
@@ -194,7 +196,8 @@ custom_components/xiaodu_reverse/
 - **到位延迟按实测调整** — 补刷新从 8/20/35 秒改为 10/25/45 秒。实测 70% → 0% 往返接近 40 秒，原来的时间点会漏掉最终状态
 - **验证码页显示真实手机号** — 进入「发送验证码」时若还没取到手机号，会再查一次验证方式接口；失败也不再静默，日志里会写明原因
 
-### v1.3.1（2026-10-31）
+<details>
+<summary>v1.3.1（2026-10-31）· 账号密码登录全链路打通</summary>
 
 - **账号密码登录全链路打通** — 现在整条登录都可以在服务端完成：账密登录 → 短信验证 → 换取 BDUSS。不需要浏览器，也不引入任何新增依赖。三个关键修复：
   - **会话 cookie 被自己顶掉**（决定性）：请求头里手写 `Cookie: BAIDUID=…` 会覆盖整个 cookie jar，把百度在 `120021` 时下发的 `UBI` / `logTraceID` / `pplogid` 全部丢掉，验证控件因此恒返回 `400021` / `810010` / `110001`。改为把 BAIDUID 注入 jar 后，`get` 当次即返回 `110000`
@@ -202,6 +205,8 @@ custom_components/xiaodu_reverse/
   - **签名耗时与设备指纹**：`elapsed` 改为 moonshad 签名循环的真实毫秒耗时（原来硬编码 `6`）；`rinfo` 在没有真实设备指纹时不再伪造（原来是随机 UUID 的 md5）
 - **短信验证拆成两步** — 「发送验证码」与「输入验证码」分开，发码后 60 秒内不可重发；验证方式查询会显示真实脱敏手机号（如 `177********`）
 - **移除浏览器方案** — 删除探测用的 Chromium 相关模块。`dv` 设备指纹与官方 `g.min.js` 输出逐字节一致（解码回环 2/2 通过）
+
+</details>
 
 <details>
 <summary>v1.2.1（2026-10-31）· README 与 manifest 修正</summary>
