@@ -67,6 +67,12 @@ LOGIN_MODE_LABELS = {
 
 COOKIE_HELP_URL = "https://xiaodu.baidu.com/saiya/smarthome/index.html"
 
+# HA 2024.11 起 OptionsFlow 由框架自动注入 config_entry（只读 property）；
+# 更早的版本需要自己塞进去，否则 self.config_entry 会抛 AttributeError。
+_OPTIONS_FLOW_HAS_CONFIG_ENTRY = isinstance(
+    getattr(config_entries.OptionsFlow, "config_entry", None), property
+)
+
 
 def _sms_wait_seconds(sent_at: float) -> int:
     """距离可以重新发送还剩多少秒（0 表示现在就能发）。"""
@@ -145,7 +151,7 @@ class XiaoDuReverseConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     @callback
     def async_get_options_flow(config_entry: ConfigEntry) -> XiaoDuReverseOptionsFlow:
         """Return the options flow."""
-        return XiaoDuReverseOptionsFlow()
+        return XiaoDuReverseOptionsFlow(config_entry)
 
     # ── reauth ─────────────────────────────────────────────────────────
 
@@ -564,9 +570,12 @@ class XiaoDuReverseConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 class XiaoDuReverseOptionsFlow(config_entries.OptionsFlow):
     """Options: refresh cookie, re-select devices, change poll interval."""
 
-    def __init__(self) -> None:
+    def __init__(self, config_entry: ConfigEntry | None = None) -> None:
         """Initialize the options flow."""
         super().__init__()
+        if not _OPTIONS_FLOW_HAS_CONFIG_ENTRY and config_entry is not None:
+            # HA 2024.1~2024.10：框架不会注入，需要自己挂上
+            self.config_entry = config_entry  # type: ignore[misc]
         self._device_dict: dict[str, str] | None = None
         self._session: aiohttp.ClientSession | None = None
         self._relogin: BaiduRelogin | None = None

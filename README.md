@@ -2,7 +2,7 @@
 
 [![Release](https://img.shields.io/github/v/release/helloArmy/ha-xiaodu-reverse?label=release)](https://github.com/helloArmy/ha-xiaodu-reverse/releases)
 [![HACS](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/helloArmy/ha-xiaodu-reverse)
-[![HA](https://img.shields.io/badge/Home%20Assistant-2025.1%2B-18BCEE.svg)](https://www.home-assistant.io/)
+[![HA](https://img.shields.io/badge/Home%20Assistant-2024.1%2B-18BCEE.svg)](https://www.home-assistant.io/)
 
 把**小度（百度 DuerOS）智能家居 App 里已有的设备**反向接入 Home Assistant —— 你可以继续在小度 App 里管理设备，同时在 HA 里做自动化、仪表盘和语音联动。
 
@@ -23,13 +23,21 @@
 
 | 项 | 要求 |
 |---|---|
-| Home Assistant | **2025.1 或更高** |
-| HACS（仅安装时需要） | 任意近期版本；也可手动复制文件 |
+| Home Assistant | **2024.1.0 或更高** |
+| 安装形态 | HAOS / Supervised / Container / Core 均可 |
+| Python | 随 HA 自带（2024.1 为 3.11），无需额外安装 |
 | 网络 | 需能访问百度小度云（`passport.baidu.com`、`xiaodu.baidu.com`） |
 | 账号 | 小度 App 中已绑定设备的小度（百度）账号 |
 | 额外依赖 | 无。只用 HA 自带的 `aiohttp` 与 `cryptography` |
 
-**为什么是 2025.1**：集成用到两个较新的核心 API —— `vacuum.VacuumActivity`（2025.1 引入）和 `OptionsFlow.config_entry` 属性（2024.11 引入）。低于 2025.1 时 vacuum 平台会导入失败，选项流程也拿不到 config entry。
+**跨版本兼容说明**：HA 2024.1 到当前版本之间有若干核心 API 发生变更，集成内已按版本自适应，无需你手动处理：
+
+| 能力 | 2024.1 ~ 2024.10 | 2024.11+ | 2025.1+ |
+|---|---|---|---|
+| 吸尘器状态 | `state` 字符串 | `state` 字符串 | `activity` + `VacuumActivity` 枚举 |
+| 选项流程的 config entry | 集成自行注入 | 框架自动注入 | 框架自动注入 |
+
+其余用到的接口（`CoverEntityFeature`、`ClimateEntityFeature`、`ColorMode`、`SensorDeviceClass` 等）在 2024.1 时已存在，且均采用 `getattr` 容错构造，不会因后续版本增删成员而导入失败。
 
 ## 安装
 
@@ -181,12 +189,12 @@ custom_components/xiaodu_reverse/
 
 > 只有最新版本保持展开，每发一个新版本就把上一版折叠起来。
 
-### v1.3.4（2026-10-31）· 修正 Home Assistant 最低版本要求
+### v1.3.4（2026-10-31）· 支持 Home Assistant 2024.1.0 及以上
 
-- **`hacs.json` 的 `homeassistant` 从 `2024.6.0` 改为 `2025.1.0`** — 原来声明偏低，在 2024.6~2024.12 上安装会直接失败。核对代码依赖后，实际最低版本由两个核心 API 决定：
-  - `vacuum.VacuumActivity`（**2025.1** 引入）—— vacuum 平台在模块级直接 import，低版本会 ImportError，连带整个条目 setup 失败
-  - `OptionsFlow.config_entry` 属性（**2024.11** 引入）—— 选项流程里到处用 `self.config_entry`，低版本拿不到该属性
-- **README 新增「环境要求」章节** — 说明 HA 版本、网络、账号与依赖要求，并解释为什么卡在 2025.1
+- **最低版本定为 `2024.1.0`** — `hacs.json` 同步；HAOS / Supervised / Container / Core 四种安装形态均可用
+- **吸尘器状态跨版本自适应** — HA 2025.1 起改用 `activity` 属性 + `VacuumActivity` 枚举，2024.x 只认 `state` 字符串。原来在模块级直接 `from ... import VacuumActivity`，在 2024.x 上会 ImportError 并连带整个条目 setup 失败。改为 `try/except` 探测后按版本挂载对应属性（两个属性语义互斥，只挂其一）
+- **选项流程跨版本自适应** — `OptionsFlow.config_entry` 是 2024.11 才由框架注入的只读属性；更早版本拿不到。改为运行时探测该 property 是否存在，不存在时在 `__init__` 里自行注入
+- **README 新增「环境要求」章节** — 列出 HA 版本、安装形态、Python、网络与依赖要求，并附跨版本兼容对照表
 
 <details>
 <summary>v1.3.3（2026-10-31）· 修复验证控件 810010 / 110001</summary>
