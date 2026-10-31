@@ -190,7 +190,24 @@ custom_components/xiaodu_reverse/
 
 > 只有最新版本保持展开，每发一个新版本就把上一版折叠起来。
 
-### v1.3.4（2026-10-31）· 支持 Home Assistant 2024.1.0 及以上
+### v1.3.6（2026-10-31）· 使用官方图标，补齐深色主题版本
+
+- **品牌图标换成小度官方图标** — 原来的紫底「小度」字标是自制的，现改用小度官方 App 图标（红蓝气泡 + 底部红蓝条），来源为小度科技在 App Store 公开发布的 512×512 应用图标
+- **新增 `dark_icon.png` / `dark_icon@2x.png`** — 深色主题下自动提亮，避免红蓝在深底上发闷。此前只有亮色版，深色主题会直接复用亮色图
+- **`logo.png` / `logo@2x.png` 同步更新** — 左侧方块由紫底字标换成官方红蓝图标，右侧项目名文字保持不变
+- **README 补充商标声明** — 明确图标仅用于标识对接的设备类型，不构成百度 / 小度的授权或认可
+
+> 注：HACS 列表面板仍显示占位图，这是 HACS 2.0.5 的已知缺陷（[#5179](https://github.com/hacs/integration/issues/5179) / [#5223](https://github.com/hacs/integration/issues/5223)）——它硬编码请求 `brands.home-assistant.io/_/<domain>/icon.png`，而该 CDN 自 HA 2026.3 起不再接收自定义集成。HA 设置里的集成列表显示正常，HACS 侧待其并入 Marketplace 后修复。
+
+<details>
+<summary>v1.3.5（2026-10-31）· 实测支持 Home Assistant 2024.1.0</summary>
+
+- **`ConfigEntry` 泛型降级** — `ConfigEntry[XiaoDuCoordinator]` 是 2024.6 才支持的写法，在 2024.1~2024.5 会 `TypeError: type 'ConfigEntry' is not subscriptable`，且发生在模块顶层，导致**整个集成导入失败、条目完全无法 setup**（这才是原先版本号写 `2024.6.0` 的真正原因）。改为 `try/except` 探测后降级为非泛型
+- **在真实 2024.1.0 容器（Python 3.11.6）上完成端到端实测** — 17/17 模块导入、条目 setup 成功、读到真实状态（窗帘 `degree=50 ON`）、控制 50%→30% 16 秒到位，无任何 Traceback
+- **同时复测 HA 2026.1.3** — 同样全部通过
+
+<details>
+<summary>v1.3.4（2026-10-31）· 支持 Home Assistant 2024.1.0 及以上</summary>
 
 - **最低版本定为 `2024.1.0`** — `hacs.json` 同步；HAOS / Supervised / Container / Core 四种安装形态均可用
 - **吸尘器状态跨版本自适应** — HA 2025.1 起改用 `activity` 属性 + `VacuumActivity` 枚举，2024.x 只认 `state` 字符串。原来在模块级直接 `from ... import VacuumActivity`，在 2024.x 上会 ImportError 并连带整个条目 setup 失败。改为 `try/except` 探测后按版本挂载对应属性（两个属性语义互斥，只挂其一）
@@ -274,10 +291,18 @@ custom_components/xiaodu_reverse/
 
 </details>
 
+</details>
+
+</details>
+
 ## 免责声明
 
 本项目通过非官方接口访问小度云，仅用于个人学习与自用。接口结构由百度控制，可能随时变更。
 请勿用于商业用途，使用风险自负。
+
+**商标声明**：「小度」「百度」及相关图形标识是北京百度网讯科技有限公司（含关联公司上海小度技术有限公司）的商标或注册商标。
+本项目的图标取自小度官方公开发布的 App 图标，**仅用于标识本集成所对接的设备类型**，不表示百度或小度对本项目的任何授权、认可或合作。
+本项目为独立的第三方开源项目，与百度公司及其关联公司无任何隶属或合作关系。
 
 ## 致谢
 
