@@ -156,41 +156,42 @@ custom_components/xiaodu_reverse/
 └── manifest.json
 ```
 
-## 更新日志
+## 📜 更新日志
 
 完整说明见 [Releases](https://github.com/helloArmy/ha-xiaodu-reverse/releases)。
 
-### v1.2.0 — 窗帘控制与延迟刷新
+### v1.2.1（2026-10-31）
 
-实测小度蓝牙 mesh 窗帘 / 纱窗（`botId=__ble_mesh__`，经小度智能屏代理）后调整：
+- **README 补全版本记录** — 新增「更新日志」与「实测验证」章节，逐版本记录变更与实机诊断结论，顶部增加 Release / HACS / HA 版本徽章
+- **修正 manifest 链接** — `documentation` 与 `issue_tracker` 从占位地址 `https://github.com/` 改为真实仓库链接，此前 HACS 页面上这两个链接是坏的
 
-- **控制后补刷新**：开 / 关 / 停后调度 8s、20s、35s 三次刷新。这类设备状态回传延迟约 30 秒，而默认轮询间隔 300 秒，原实现会让用户在 5 分钟内看到旧状态，像是没反应。
-- **移除 `SET_POSITION`**：`SetPositionRequest` 实测返回 `header name is not vaild`，设备不支持设定任意位置，暴露滑块会误导。`current_position` 保留为只读，仍随 `degree` 变化。
-- 清理未使用导入。
+<details>
+<summary>v1.2.0（2026-10-31）· 窗帘控制与延迟刷新</summary>
 
-### v1.1.0 — 修复空调温度控制
+- **控制后补刷新** — 开 / 关 / 停后调度 8s、20s、35s 三次刷新。小度蓝牙 mesh 窗帘 / 纱窗（`botId=__ble_mesh__`，经小度智能屏代理）状态回传延迟约 30 秒，而默认轮询间隔 300 秒，原实现会让用户在 5 分钟内看到旧状态，像是没反应
+- **移除 `SET_POSITION`** — `SetPositionRequest` 实测返回 `header name is not vaild`，设备不支持设定任意位置，暴露滑块会误导；`current_position` 保留为只读，仍随 `degree` 变化
 
-实机诊断（海信爱家空调）得到两个与常见假设相反的结论：
+</details>
 
-| 指令 | 云端返回 | 结论 |
-|---|---|---|
-| `SetTargetTemperatureRequest` | `header name is not vaild` | 该设备族不存在此指令 |
-| `IncrementTemperatureRequest` | `控制失败，请检查该设备的电源和网络是否正常` | 指令有效，关机时设备拒绝 |
+<details>
+<summary>v1.1.0（2026-10-31）· 修复空调温度控制</summary>
 
-原实现先试无效指令、失败后走增减、再失败**静默返回成功**，用户在界面上操作无反应也无报错。改为：
+- **温度控制改为增减优先** — 实机诊断（海信爱家空调）发现 `SetTargetTemperatureRequest` 返回 `header name is not vaild`（该设备族无此指令），而 `IncrementTemperatureRequest` 指令有效、仅在关机时被设备拒绝。改为：增减逼近 → 直接设温兜底 → 仍失败抛异常
+- **不再静默成功** — 原实现两种指令都失败后仍返回成功，界面上操作无反应也无报错；现在关机状态会明确提示「空调当前处于关机状态，请先开机」
+- **部分完成算成功** — 避免把已经发生的温度变化谎报为失败
 
-1. 优先用增减指令逼近目标温度
-2. 失败再退到直接设温（部分设备支持该指令）
-3. 两者皆失败抛 `HomeAssistantError`；空调关机时提示先开机
-4. 部分完成算成功，避免把已发生的温度变化谎报为失败
+</details>
 
-### v1.0.0 — 首个可用版本
+<details>
+<summary>v1.0.0（2026-10-31）· 首个可用版本</summary>
 
-- 百度 wappass 账号密码登录（RSA + moonshadV3 风控签名 + 短信验证码）与 BDUSS Cookie 登录
-- 凭据失效自动重登、批量轮询、九类平台实体、`panels` 多功能设备拆分
-- 修复 HA 2026.10（Python 3.14）下 `VacuumEntityFeature.BATTERY` 被移除导致的平台导入失败
-- 修复 `XiaoDuEntity.state()` 覆盖 `Entity.state` property 导致的 `__repr__` 无限递归爆栈
-- 窗帘位置字段补充 `degree`
+- **登录** — 百度 wappass 账号密码登录（RSA + moonshadV3 风控签名 + 短信验证码）与 BDUSS Cookie 登录；凭据失效自动重新登录；批量轮询降低请求数
+- **九类平台实体** — light / switch / cover / climate / fan / lock / button / sensor / vacuum，多功能设备按 `panels` 拆分为独立功能开关并原样透传厂商 payload
+- **修复 HA 2026.10（Python 3.14）兼容** — `VacuumEntityFeature.BATTERY` 已被移除，类体硬引用导致 vacuum 平台 ImportError、整条 setup 失败；改用 `getattr` 容错构造
+- **修复 `__repr__` 无限递归爆栈** — `XiaoDuEntity.state()` 覆盖了 HA 的 `Entity.state` property，`str(self.state)` 得到 bound method，其 repr 又引用实体，触发 `RecursionError: Stack overflow`，所有实体 `Error adding entity` 且恒为 unavailable；改名为 `attr_value()`
+- **窗帘位置字段补充 `degree`** — 小度窗帘实际使用 `degree` 而非 `position`
+
+</details>
 
 ## 免责声明
 
