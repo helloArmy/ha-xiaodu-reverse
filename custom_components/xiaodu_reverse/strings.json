@@ -10,11 +10,11 @@
       },
       "login": {
         "title": "百度账号登录",
-        "description": "使用小度 App 绑定的百度账号登录。\n\n建议同时填写 BAIDUID：在浏览器打开 {cookie_url} 并登录后，从开发者工具中复制 `BAIDUID` 的 Cookie 值（形如 `XXXX...:FG=1`），可显著降低被风控要求短信验证的概率。",
+        "description": "使用小度 App 绑定的百度账号登录。\n\nBAIDUID 可留空，集成会自动向百度获取。\n\n若提示「风控二次验证（400023）」，说明百度把本次请求判定为陌生设备（受 IP 与 TLS 指纹影响，与 BAIDUID 无关），请返回上一步改用「直接填写 BDUSS Cookie」登录。",
         "data": {
           "username": "百度账号（手机号/邮箱/用户名）",
           "password": "密码",
-          "baiduid": "BAIDUID（可选，建议填写）"
+          "baiduid": "BAIDUID（可选，留空自动获取）"
         }
       },
       "sms_verify": {

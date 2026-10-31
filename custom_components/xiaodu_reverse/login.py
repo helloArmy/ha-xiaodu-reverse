@@ -90,6 +90,42 @@ class BaiduLoginError(Exception):
     """Base error for the Baidu login flow."""
 
 
+async def fetch_baiduid(session: aiohttp.ClientSession) -> str:
+    """Return a BAIDUID issued by baidu.com, or an empty string.
+
+    Baidu sets this visitor cookie on any baidu.com response, so there is no
+    reason to make the user dig it out of the browser devtools. Values are
+    read from the raw ``Set-Cookie`` headers rather than the session cookie
+    jar, which is not guaranteed to be enabled or writable here.
+
+    Note: BAIDUID alone does **not** get around risk control — verified on
+    real hardware that random, freshly-fetched and browser-copied values all
+    still return 400023. Baidu weighs IP and TLS fingerprint far higher.
+    """
+    headers = {
+        "User-Agent": _USER_AGENT,
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "zh-CN,zh;q=0.9",
+    }
+    try:
+        async with session.get(
+            "https://www.baidu.com/", headers=headers, timeout=15, allow_redirects=True
+        ) as resp:
+            await resp.read()
+            cookies = resp.headers.getall("Set-Cookie", [])
+    except (aiohttp.ClientError, TimeoutError, asyncio.TimeoutError) as exc:
+        _LOGGER.debug("自动获取 BAIDUID 失败: %s", exc)
+        return ""
+    for raw in cookies:
+        match = re.search(r"BAIDUID=([^;]+)", raw)
+        if match:
+            value = match.group(1).strip()
+            if value:
+                _LOGGER.debug("已自动获取 BAIDUID")
+                return value
+    return ""
+
+
 class BaiduCaptchaRequired(BaiduLoginError):
     """Login requires (or re-requires) a captcha."""
 

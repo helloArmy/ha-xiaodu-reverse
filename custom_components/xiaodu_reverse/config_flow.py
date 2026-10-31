@@ -54,6 +54,7 @@ from .login import (
     BaiduLogin,
     BaiduLoginBlocked,
     BaiduLoginError,
+    fetch_baiduid,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -163,7 +164,13 @@ class XiaoDuReverseConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             if not username or not password:
                 errors["base"] = ERROR_LOGIN_FAILED
             else:
-                self._login = BaiduLogin(self._get_session())
+                session = self._get_session()
+                self._login = BaiduLogin(session)
+                if not baiduid:
+                    # Baidu issues BAIDUID on any baidu.com response, so there
+                    # is no reason to make the user copy it from devtools.
+                    baiduid = await fetch_baiduid(session)
+                    self._pending_baiduid = baiduid
                 try:
                     result = await self._login.login(
                         username, password, baiduid=baiduid

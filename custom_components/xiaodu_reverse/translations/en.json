@@ -10,11 +10,11 @@
       },
       "login": {
         "title": "Baidu account login",
-        "description": "Sign in with the Baidu account bound to your XiaoDu app.\n\nProviding BAIDUID is strongly recommended: open {cookie_url} in a browser, log in, then copy the `BAIDUID` cookie value (looks like `XXXX...:FG=1`) from the developer tools. It greatly reduces the chance of an SMS challenge.",
+        "description": "Sign in with the Baidu account bound to your XiaoDu app.\n\nBAIDUID may be left blank — the integration fetches one from Baidu automatically.\n\nIf you get a risk-control challenge (400023), Baidu has judged this request as an unknown device (driven by IP and TLS fingerprint, not BAIDUID). Go back and use the \"BDUSS cookie\" login instead.",
         "data": {
           "username": "Baidu account (phone / email / username)",
           "password": "Password",
-          "baiduid": "BAIDUID (optional, recommended)"
+          "baiduid": "BAIDUID (optional, auto-fetched)"
         }
       },
       "sms_verify": {
