@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 import platform
 import shutil
 import subprocess
@@ -21,7 +22,7 @@ from homeassistant.core import HomeAssistant
 
 _LOGGER = logging.getLogger(__name__)
 
-PROBE_VERSION = 1
+PROBE_VERSION = 2
 CFT_URL = (
     "https://storage.googleapis.com/chrome-for-testing-public/156.0.8078.80"
     "/linux64/chrome-headless-shell-linux64.zip"
@@ -124,16 +125,55 @@ async def _download(session, url: str, target: Path) -> dict[str, Any]:
     }
 
 
-def _extract(zip_path: Path, exe: Path) -> bool:
-    """Extract the headless-shell binary from the archive."""
+def _extract(zip_path: Path, dest: Path) -> Path | None:
+    """Extract the whole archive and return the browser binary path.
+
+    The headless shell needs its sibling resources (``icudtl.dat``,
+    ``v8_context_snapshot.bin``, ``libEGL.so`` …), so the archive must be
+    unpacked as a whole rather than picking the executable only.
+    """
+    dest.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(zip_path) as archive:
-        for member in archive.namelist():
-            if member.endswith("/chrome-headless-shell"):
-                with archive.open(member) as src, exe.open("wb") as dst:
-                    shutil.copyfileobj(src, dst)
-                exe.chmod(0o755)
-                return True
-    return False
+        archive.extractall(dest)
+    return _find_binary(dest)
+
+
+def _find_binary(root: Path) -> Path | None:
+    """Locate the browser executable inside an unpacked archive."""
+    if not root.exists():
+        return None
+    for candidate in root.rglob("chrome-headless-shell"):
+        if candidate.is_file():
+            try:
+                candidate.chmod(0o755)
+            except Exception:  # noqa: BLE001
+                pass
+            return candidate
+    return None
+
+
+def _ldd_missing(exe: Path) -> dict[str, Any]:
+    """Report shared libraries that ``ldd`` cannot resolve."""
+    ldd = shutil.which("ldd")
+    if not ldd:
+        return {"ok": False, "error": "no-ldd"}
+    try:
+        proc = subprocess.run(
+            [ldd, str(exe)], capture_output=True, text=True, timeout=90, check=False
+        )
+    except Exception as exc:  # noqa: BLE001
+        return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
+    missing = [
+        line.split("=>", 1)[0].strip()
+        for line in proc.stdout.splitlines()
+        if "not found" in line
+    ]
+    return {
+        "ok": True,
+        "missing": missing,
+        "count": len(missing),
+        "stderr": (proc.stderr or "").strip()[:200],
+    }
 
 
 def _run_version(exe: Path) -> dict[str, Any]:
@@ -143,7 +183,7 @@ def _run_version(exe: Path) -> dict[str, Any]:
             [str(exe), "--version"],
             capture_output=True,
             text=True,
-            timeout=60,
+            timeout=90,
             check=False,
         )
     except Exception as exc:  # noqa: BLE001
@@ -152,7 +192,7 @@ def _run_version(exe: Path) -> dict[str, Any]:
         "ok": proc.returncode == 0,
         "code": proc.returncode,
         "stdout": (proc.stdout or "").strip()[:120],
-        "stderr": (proc.stderr or "").strip()[:400],
+        "stderr": (proc.stderr or "").strip()[:600],
     }
 
 
@@ -314,12 +354,16 @@ async def _run(hass: HomeAssistant, session, base: Path) -> dict[str, Any]:
         "docker": Path("/.dockerenv").exists(),
         "config_dir": hass.config.config_dir,
         "free_mb": round(shutil.disk_usage(base).free / 1048576),
+        "euid": os.geteuid() if hasattr(os, "geteuid") else None,
+        "apt": shutil.which("apt-get") or "",
+        "dpkg": shutil.which("dpkg") or "",
+        "tar": shutil.which("tar") or "",
+        "ldconfig": shutil.which("ldconfig") or shutil.which("/sbin/ldconfig") or "",
     }
     info["env"] = env
     _log(
-        "env python={python} arch={machine} docker={docker} free={free_mb}MB".format(
-            **env
-        )
+        "env python={python} arch={machine} docker={docker} euid={euid} "
+        "free={free_mb}MB apt={apt} dpkg={dpkg}".format(**env)
     )
 
     existing = {name: shutil.which(name) for name in BROWSER_BINARIES if shutil.which(name)}
@@ -333,17 +377,23 @@ async def _run(hass: HomeAssistant, session, base: Path) -> dict[str, Any]:
         f"missing={libs['missing_count']} {','.join(libs['missing'][:20])}"
     )
 
-    exe = base / "chrome-headless-shell"
+    unpacked = base / "chromium"
     archive = base / "chs.zip"
     profile = base / "profile"
+    exe = _find_binary(unpacked)
 
-    if not exe.exists():
-        download = await _download(session, CFT_URL, archive)
+    if exe is None:
+        if archive.exists() and archive.stat().st_size > 1_000_000:
+            _log("archive already downloaded, skipping fetch")
+            download = {"ok": True, "cached": True, "bytes": archive.stat().st_size}
+        else:
+            download = await _download(session, CFT_URL, archive)
         info["download"] = download
         _log(
             "download "
             + (
-                f"ok {download['bytes'] / 1048576:.1f}MB in {download['seconds']}s"
+                f"ok {download['bytes'] / 1048576:.1f}MB"
+                + (" (cached)" if download.get("cached") else f" in {download.get('seconds')}s")
                 if download.get("ok")
                 else f"FAILED {download}"
             )
@@ -351,27 +401,39 @@ async def _run(hass: HomeAssistant, session, base: Path) -> dict[str, Any]:
         if not download.get("ok"):
             return info
         try:
-            extracted = _extract(archive, exe)
+            exe = _extract(archive, unpacked)
+            extracted = exe is not None
         except Exception as exc:  # noqa: BLE001
             extracted = False
             info["extract_error"] = f"{type(exc).__name__}: {exc}"
         info["extracted"] = extracted
         _log(f"extract {extracted} -> {exe}")
-        if not extracted:
+        if not extracted or exe is None:
             return info
     else:
-        _log("binary already present")
+        _log(f"binary already present {exe}")
+
+    ldd = _ldd_missing(exe)
+    info["ldd"] = ldd
+    if ldd.get("ok"):
+        _log(
+            f"ldd missing={ldd['count']} {','.join(ldd['missing'][:20])}"
+        )
+    else:
+        _log(f"ldd unavailable {ldd.get('error')}")
 
     version = _run_version(exe)
     info["version"] = version
-    _log(
-        "binary "
-        + (
-            f"ok {version.get('stdout')}"
-            if version.get("ok")
-            else f"FAILED code={version.get('code')} err={version.get('stderr')}"
+    if version.get("ok"):
+        _log(f"binary ok {version.get('stdout')}")
+    else:
+        _log(
+            "binary FAILED code={} error={} stderr={}".format(
+                version.get("code"),
+                version.get("error"),
+                (version.get("stderr") or "").replace("\n", " ")[:300],
+            )
         )
-    )
     if not version.get("ok"):
         return info
 
