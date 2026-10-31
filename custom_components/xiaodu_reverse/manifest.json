@@ -2,7 +2,7 @@
   "domain": "xiaodu_reverse",
   "name": "小度反向接入",
   "codeowners": [
-    "helloArmy"
+    "@helloArmy"
   ],
   "config_flow": true,
   "dependencies": [],
@@ -12,9 +12,6 @@
   "issue_tracker": "https://github.com/helloArmy/ha-xiaodu-reverse/issues",
   "loggers": [
     "custom_components.xiaodu_reverse"
-  ],
-  "requirements": [
-    "cryptography>=3.3.2"
   ],
   "version": "1.3.1"
 }
