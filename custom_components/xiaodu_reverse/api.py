@@ -42,6 +42,7 @@ _LOGGER = logging.getLogger(__name__)
 # Directive names (DuerOS.ConnectedHome.Control)
 CMD_TURN_ON = "TurnOnRequest"
 CMD_TURN_OFF = "TurnOffRequest"
+CMD_TURN_ON_PERCENT = "TurnOnPercentRequest"
 CMD_PAUSE = "PauseRequest"
 CMD_SET_MODE = "SetModeRequest"
 CMD_SET_BRIGHTNESS = "SetBrightnessPercentageRequest"
@@ -404,6 +405,28 @@ class XiaoDuApi:
     async def async_cover_stop(self) -> tuple[bool, str | None]:
         """Stop the curtain."""
         return await self.async_send_command(self._build_payload(CMD_PAUSE))
+
+    async def async_cover_set_position(self, percent: int) -> tuple[bool, str | None]:
+        """Set the curtain open percentage.
+
+        Directive name captured from the official web UI (dragging the curtain
+        icon): ``TurnOnPercentRequest``. The value must appear twice — as a
+        string in ``parameters.attributeValue`` and again as ``payload.degree``.
+        Neighbouring names (``SetPositionRequest`` / ``SetDegreeRequest`` /
+        ``SetPercentageRequest``) are rejected by the cloud with
+        ``21098 header name is not vaild``.
+
+        The curtain is BLE-mesh proxied through a 小度 smart display, so it
+        takes ~15 s to actually reach the target and report back.
+        """
+        value = str(max(0, min(100, int(percent))))
+        return await self.async_send_command(
+            self._build_payload(
+                CMD_TURN_ON_PERCENT,
+                parameters={"attribute": "degree", "attributeValue": value},
+                extra_state={"degree": value},
+            )
+        )
 
     # ── climate ────────────────────────────────────────────────────────
 

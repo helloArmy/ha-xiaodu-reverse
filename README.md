@@ -135,8 +135,8 @@ HA 集成  ──账密登录──▶  passport.baidu.com/v2/api/?login        
 ## 已知限制
 
 - **仅云控**：完全依赖小度云，HA 断网即失效，本地局域网不生效
-- **轮询延迟**：状态最长滞后一个轮询周期（默认 300 秒）。窗帘、纱窗这类蓝牙 mesh 设备本身状态回传就要约 30 秒，控制后请稍等再判断结果
-- **窗帘不支持定位**：实测小度窗帘 / 纱窗只接受开 / 关 / 停，`SetPositionRequest` 返回 `header name is not vaild`，因此不提供位置滑块，`current_position` 仅作只读显示
+- **到位有延迟**：窗帘、纱窗是蓝牙 mesh 设备，经小度智能屏代理转发，下发指令后要 15~30 秒才真正到位并回传状态。集成在 10s / 25s / 45s 各补一次刷新，但滑块位置短时间内仍会停在旧值，这是设备本身的延迟，不是没执行
+- **窗帘定位走私有指令**：小度窗帘 / 纱窗的定位指令是 `TurnOnPercentRequest`（`SetPositionRequest` / `SetDegreeRequest` / `SetPercentageRequest` 都会被云端的白名单拒为 `21098 header name is not vaild`）。该指令名是从官方网页版拖动窗帘图标的真实请求里抓到的，属于未公开接口，未来可能变化
 - **空调关机时拒绝调节**：多数小度空调在关机状态会拒绝温度与风速指令（`控制失败，请检查该设备的电源和网络是否正常`），请先开机
 - **室温不可读**：部分空调设备的 `stateSetting` 里没有 `temperature` 字段，`current_temperature` 会一直是空值，这是设备不上报
 - **不支持的设备**：某些厂商设备的小度技能是「只读」的，会出现实体但控制被云端拒绝（日志有 `控制失败 (xxx)` 提示）
@@ -155,8 +155,8 @@ HA 集成  ──账密登录──▶  passport.baidu.com/v2/api/?login        
 | 批量状态轮询 | 可用 |
 | 空调：开关 / 模式 / 调温 | 可用 |
 | 窗帘 / 纱窗：开 / 关 | 可用（约 30 秒到位） |
-| 窗帘 / 纱窗：位置反馈 | 可用（只读，`degree`） |
-| 窗帘 / 纱窗：设定位置 | 设备不支持 |
+| 窗帘 / 纱窗：位置反馈 | 可用（`degree`） |
+| 窗帘 / 纱窗：设定位置 | 可用（`cover.set_cover_position`，约 20-30 秒到位） |
 | `panels` 多功能设备拆分 | 未验证：代码已实现，测试环境设备无 `panels` |
 
 ## 目录结构
@@ -181,6 +181,18 @@ custom_components/xiaodu_reverse/
 ## 更新日志
 
 完整说明见 [Releases](https://github.com/helloArmy/ha-xiaodu-reverse/releases)。
+
+### v1.3.2（2026-10-31）
+
+- **窗帘 / 纱窗支持设定开合百分比** — HA 里现在有位置滑块，`cover.set_cover_position` 可用。关键是找对了指令名：`TurnOnPercentRequest`（`SetPositionRequest`/`SetDegreeRequest`/`SetPercentageRequest` 全被云端 `21098 header name is not vaild` 拒绝）。做法是打开小度 App 的窗帘详情页（本质是网页版 `xiaodu.baidu.com/saiya/smarthome`），通过 WebView 调试通道拖动窗帘图标，抓到真实请求：
+  ```json
+  {"header":{"namespace":"DuerOS.ConnectedHome.Control","name":"TurnOnPercentRequest","payloadVersion":3},
+   "payload":{"applianceId":"…","parameters":{"attribute":"degree","attributeValue":"45","proxyConnectStatus":false},
+              "appliance":{"applianceId":["…"]},"degree":"45"}}
+  ```
+  注意 `degree` 要同时出现在 `parameters.attributeValue` 和 `payload.degree`，且都是**字符串**；`degree` 属于可调属性，传裸值而不是 `{"value": 45}`
+- **到位延迟按实测调整** — 补刷新从 8/20/35 秒改为 10/25/45 秒。实测 70% → 0% 往返接近 40 秒，原来的时间点会漏掉最终状态
+- **验证码页显示真实手机号** — 进入「发送验证码」时若还没取到手机号，会再查一次验证方式接口；失败也不再静默，日志里会写明原因
 
 ### v1.3.1（2026-10-31）
 

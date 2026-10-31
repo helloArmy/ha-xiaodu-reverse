@@ -7,6 +7,7 @@ import logging
 from typing import Any
 
 from homeassistant.components.cover import (
+    ATTR_POSITION,
     CoverDeviceClass,
     CoverEntity,
     CoverEntityFeature,
@@ -54,9 +55,9 @@ class XiaoDuCover(XiaoDuEntity, CoverEntity):
     _attr_device_class = CoverDeviceClass.CURTAIN
 
     # Ble-mesh curtains (botId=__ble_mesh__, proxied through a 小度智能屏) take
-    # about 30 s to report their new state. Without follow-up polls the UI
-    # would keep showing the old position until the next scheduled refresh.
-    FOLLOW_UP_REFRESH_DELAYS: tuple[int, ...] = (8, 20, 35)
+    # 15-30 s to travel and report back — measured up to 40 s for a 70% → 0%
+    # round trip. Poll a few times so the UI catches up without a manual refresh.
+    FOLLOW_UP_REFRESH_DELAYS: tuple[int, ...] = (10, 25, 45)
 
     def __init__(
         self,
@@ -77,15 +78,12 @@ class XiaoDuCover(XiaoDuEntity, CoverEntity):
 
     @property
     def supported_features(self) -> CoverEntityFeature:
-        """Return the supported cover features.
-
-        Position is read-only. Verified on real hardware: XiaoDu curtains
-        reject ``SetPositionRequest`` with ``header name is not vaild``, so
-        exposing SET_POSITION would give the user a slider that does nothing.
-        ``current_position`` still tracks ``degree`` for display.
-        """
+        """Return the supported cover features."""
         return (
-            CoverEntityFeature.OPEN | CoverEntityFeature.CLOSE | CoverEntityFeature.STOP
+            CoverEntityFeature.OPEN
+            | CoverEntityFeature.CLOSE
+            | CoverEntityFeature.STOP
+            | CoverEntityFeature.SET_POSITION
         )
 
     @property
@@ -142,4 +140,19 @@ class XiaoDuCover(XiaoDuEntity, CoverEntity):
     async def async_stop_cover(self, **kwargs: Any) -> None:
         """Stop the cover."""
         await self.async_send(self._api.async_cover_stop())
+        self._schedule_follow_up_refresh()
+
+    async def async_set_cover_position(self, **kwargs: Any) -> None:
+        """Move the cover to a given open percentage (0 = closed, 100 = open)."""
+        try:
+            position = int(kwargs.get(ATTR_POSITION, 0))
+        except (TypeError, ValueError):
+            return
+        position = max(0, min(100, position))
+        if position == 0:
+            await self.async_send(self._api.async_cover_close())
+        elif position == 100:
+            await self.async_send(self._api.async_cover_open())
+        else:
+            await self.async_send(self._api.async_cover_set_position(position))
         self._schedule_follow_up_refresh()

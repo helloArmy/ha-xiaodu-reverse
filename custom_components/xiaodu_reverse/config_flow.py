@@ -112,6 +112,7 @@ class XiaoDuReverseConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self._relogin: BaiduRelogin | None = None
         self._sms_sent_at: float = 0.0
         self._mobile: str = ""
+        self._mobile_tried: bool = False
         self._session: aiohttp.ClientSession | None = None
         self._reauth_entry: ConfigEntry | None = None
         self._login_mode: str = LOGIN_MODE_PASSWORD
@@ -222,6 +223,7 @@ class XiaoDuReverseConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     self._relogin = client
                     self._sms_sent_at = 0.0
                     self._mobile = ""
+                    self._mobile_tried = False
                     try:
                         await client.async_get_methods()
                         self._mobile = client.mobile
@@ -264,9 +266,17 @@ class XiaoDuReverseConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         detail = ""
         client = self._relogin
 
-        if client is not None and not self._mobile and client.mobile:
-            # 登录步骤里没取到就再补一次
-            self._mobile = client.mobile
+        if client is not None and not self._mobile and not self._mobile_tried:
+            # 登录步骤里没取到（或查询失败）就在这里补一次，此时会话更新鲜。
+            # 每个流程只补一次，避免发送失败重渲染时反复请求。
+            self._mobile_tried = True
+            try:
+                await client.async_get_methods()
+            except Exception as exc:  # noqa: BLE001
+                _LOGGER.warning("查询验证方式失败（不影响发码）: %s", exc)
+            self._mobile = client.mobile or ""
+            if not self._mobile:
+                _LOGGER.warning("未能取得脱敏手机号，验证方式接口未返回 mobile 字段")
 
         if client is None:
             errors["base"] = ERROR_SESSION_EXPIRED
@@ -552,6 +562,7 @@ class XiaoDuReverseOptionsFlow(config_entries.OptionsFlow):
         self._relogin: BaiduRelogin | None = None
         self._sms_sent_at: float = 0.0
         self._mobile: str = ""
+        self._mobile_tried: bool = False
         self._pending_username: str = ""
         self._pending_password: str = ""
         self._pending_baiduid: str = ""
@@ -654,6 +665,7 @@ class XiaoDuReverseOptionsFlow(config_entries.OptionsFlow):
                 self._relogin = client
                 self._sms_sent_at = 0.0
                 self._mobile = ""
+                self._mobile_tried = False
                 try:
                     await client.async_get_methods()
                     self._mobile = client.mobile
@@ -688,9 +700,17 @@ class XiaoDuReverseOptionsFlow(config_entries.OptionsFlow):
         detail = ""
         client = self._relogin
 
-        if client is not None and not self._mobile and client.mobile:
-            # 登录步骤里没取到就再补一次
-            self._mobile = client.mobile
+        if client is not None and not self._mobile and not self._mobile_tried:
+            # 登录步骤里没取到（或查询失败）就在这里补一次，此时会话更新鲜。
+            # 每个流程只补一次，避免发送失败重渲染时反复请求。
+            self._mobile_tried = True
+            try:
+                await client.async_get_methods()
+            except Exception as exc:  # noqa: BLE001
+                _LOGGER.warning("查询验证方式失败（不影响发码）: %s", exc)
+            self._mobile = client.mobile or ""
+            if not self._mobile:
+                _LOGGER.warning("未能取得脱敏手机号，验证方式接口未返回 mobile 字段")
 
         if client is None:
             errors["base"] = ERROR_SESSION_EXPIRED
