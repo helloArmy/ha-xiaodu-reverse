@@ -8,21 +8,6 @@
 
 > **「反向」的含义**：通常是小度去控制 HA 里的设备；这个集成走反方向 —— 从百度小度云把小度生态下的设备「反向拉回」HA。
 
-## 设计来源
-
-本集成的两个关键能力分别取自两个开源项目，取长补短：
-
-| 能力 | 来源 | 说明 |
-|---|---|---|
-| **登录方式** | [RockJesus/ha-xiaodu](https://github.com/RockJesus/ha-xiaodu) | 完整的百度账号密码登录：RSA 加密 + moonshadV3 风控签名 + 短信验证码 + 凭据自动续期。该参考项目走的是移动端 `wappass` 接口，本项目改用 PC 端真实接口 `passport.baidu.com/v2/api/?login` |
-| **控制方式** | [2331892928/hass_xiaodu](https://github.com/2331892928/hass_xiaodu) | 小度云 `directivesend` 指令通道，以及 **panels 面板驱动**的多功能设备拆分（晾衣架、空调扇等），可原样透传厂商 payload |
-
-两者底层是同一套小度云 API（`DuerOS.ConnectedHome.Control`），差异主要在指令覆盖度与面板能力，本项目做了合并：
-
-- 保留 hass_xiaodu 的面板控制签名语义（`switchType` / `typeValue` / `headerNameOn` / `headerNameOff` / `payloadObject`）；
-- 补上 ha-xiaodu 的「直接设定温度 / 风速 / 摆风」指令（失败时自动回退到「加一度 / 减一度」逼近）；
-- 用 ha-xiaodu 的 `LoginExpired` 异常体系，让 Cookie 失效能触发自动重登而不是静默失败。
-
 ## 功能
 
 - **两种登录**：百度账号密码（推荐，短信验证后可自动换取 BDUSS）／直接粘贴 BDUSS Cookie
@@ -264,8 +249,10 @@ custom_components/xiaodu_reverse/
 
 ## 致谢
 
-- [RockJesus/ha-xiaodu](https://github.com/RockJesus/ha-xiaodu) —— 登录协议与风控签名实现
-- [2331892928/hass_xiaodu](https://github.com/2331892928/hass_xiaodu) —— 控制通道与面板驱动思路
+本集成参考了以下开源项目的实现思路：
+
+- [RockJesus/ha-xiaodu](https://github.com/RockJesus/ha-xiaodu)
+- [2331892928/hass_xiaodu](https://github.com/2331892928/hass_xiaodu)
 
 ## License
 
