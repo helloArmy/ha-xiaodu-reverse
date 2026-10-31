@@ -22,7 +22,7 @@ from homeassistant.core import HomeAssistant
 
 _LOGGER = logging.getLogger(__name__)
 
-PROBE_VERSION = 2
+PROBE_VERSION = 3
 CFT_URL = (
     "https://storage.googleapis.com/chrome-for-testing-public/156.0.8078.80"
     "/linux64/chrome-headless-shell-linux64.zip"
@@ -136,6 +136,56 @@ def _extract(zip_path: Path, dest: Path) -> Path | None:
     with zipfile.ZipFile(zip_path) as archive:
         archive.extractall(dest)
     return _find_binary(dest)
+
+
+def _read_head(path: str, limit: int = 400) -> str:
+    """Read the beginning of a text file, flattened onto one line."""
+    try:
+        text = Path(path).read_text(encoding="utf-8", errors="replace")
+    except Exception as exc:  # noqa: BLE001
+        return f"<{type(exc).__name__}>"
+    return " | ".join(line.strip() for line in text.splitlines() if line.strip())[:limit]
+
+
+def _diagnose(exe: Path) -> dict[str, Any]:
+    """Collect the facts needed to explain why the binary will not start."""
+    out: dict[str, Any] = {
+        "os_release": _read_head("/etc/os-release"),
+        "alpine_release": _read_head("/etc/alpine-release", 40),
+        "debian_version": _read_head("/etc/debian_version", 40),
+        "musl_loader": Path("/lib/ld-musl-x86_64.so.1").exists(),
+        "glibc_loader_lib64": Path("/lib64/ld-linux-x86-64.so.2").exists(),
+        "glibc_loader_lib": Path("/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2").exists(),
+        "apk": shutil.which("apk") or shutil.which("/sbin/apk") or "",
+        "uname": " ".join(platform.uname()),
+    }
+    try:
+        out["libc"] = list(platform.libc_ver())
+    except Exception:  # noqa: BLE001
+        out["libc"] = []
+    probes = {
+        "libnss3": ("/usr/lib/libnss3.so", "/usr/lib/x86_64-linux-gnu/libnss3.so"),
+        "libgbm": ("/usr/lib/libgbm.so.1", "/usr/lib/x86_64-linux-gnu/libgbm.so.1"),
+        "libgtk3": ("/usr/lib/libgtk-3.so.0", "/usr/lib/x86_64-linux-gnu/libgtk-3.so.0"),
+        "libc_musl": ("/lib/libc.musl-x86_64.so.1",),
+        "libc_so6": ("/lib/x86_64-linux-gnu/libc.so.6", "/lib/libc.so.6"),
+    }
+    out["present"] = {
+        name: any(Path(candidate).exists() for candidate in paths)
+        for name, paths in probes.items()
+    }
+    try:
+        stat = exe.stat()
+        head = exe.open("rb").read(4)
+        out["exe"] = {
+            "size": stat.st_size,
+            "mode": oct(stat.st_mode),
+            "executable": os.access(exe, os.X_OK),
+            "magic": head.hex(),
+        }
+    except Exception as exc:  # noqa: BLE001
+        out["exe"] = {"error": f"{type(exc).__name__}: {exc}"}
+    return out
 
 
 def _find_binary(root: Path) -> Path | None:
@@ -434,6 +484,21 @@ async def _run(hass: HomeAssistant, session, base: Path) -> dict[str, Any]:
                 (version.get("stderr") or "").replace("\n", " ")[:300],
             )
         )
+        diag = _diagnose(exe)
+        info["diagnose"] = diag
+        _log(f"diag os_release={diag['os_release']}")
+        _log(f"diag alpine={diag['alpine_release']} debian={diag['debian_version']} libc={diag['libc']}")
+        _log(
+            "diag loader musl={} glibc_lib64={} glibc_lib={} apk={}".format(
+                diag["musl_loader"],
+                diag["glibc_loader_lib64"],
+                diag["glibc_loader_lib"],
+                diag["apk"],
+            )
+        )
+        _log(f"diag present {diag['present']}")
+        _log(f"diag exe {diag['exe']}")
+        _log(f"diag uname {diag['uname']}")
     if not version.get("ok"):
         return info
 
