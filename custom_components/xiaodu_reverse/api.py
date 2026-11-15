@@ -1,3 +1,5 @@
+# Copyright (c) 2026 helloArmy
+# Portions Copyright (c) 2024 AMEN (2331892928/hass_xiaodu, MIT)
 """XiaoDu (小度) cloud smart-home API client.
 
 Control layer follows **2331892928/hass_xiaodu** (``api/XiaoDuAPI.py``):

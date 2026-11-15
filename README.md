@@ -46,8 +46,8 @@
 
 [![在 HACS 中打开](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=helloArmy&repository=ha-xiaodu-reverse&category=integration)
 
-> 本集成尚未进入 HACS 默认仓库，所以**首次**仍要先按「方式二」添加一次自定义存储库；
-> 添加之后这个按钮就能直接在 HACS 里打开本集成页面，后续安装 / 更新都走它。
+> 本集成作为**自定义存储库**分发，不在 HACS 默认仓库中（原因见下方「与上游项目的关系」）。
+> **首次**需先按「方式二」添加一次，之后这个按钮就能直接在 HACS 里打开，安装 / 更新都走它。
 
 ### 方式二：HACS 添加自定义存储库
 
@@ -188,11 +188,20 @@ custom_components/xiaodu_reverse/
 
 完整说明见 [Releases](https://github.com/helloArmy/ha-xiaodu-reverse/releases)。
 
-### v1.3.5（2026-10-31）· 实测支持 Home Assistant 2024.1.0
+### v1.3.6（2026-11-15）· 补齐上游版权声明
+
+- **LICENSE 补上两个上游项目的版权行** — 代码派生自 RockJesus/ha-xiaodu（`Copyright (c) 2026 XiaoDu HA Integration`）与 2331892928/hass_xiaodu（`Copyright (c) 2024 AMEN`），两者均为 MIT，原版权声明必须保留。此前 LICENSE 只有本项目自己的版权行
+- **7 个派生模块补文件头声明** — `__init__.py`、`api.py`、`appliance_types.py`、`config_flow.py`、`const.py`、`login.py`、`switch.py`
+- **README 新增「与上游项目的关系」** — 列出每个派生模块对应的上游与版权，并说明本项目不申请进入 HACS 默认仓库的原因
+
+<details>
+<summary>v1.3.5（2026-10-31）· 实测支持 Home Assistant 2024.1.0</summary>
 
 - **`ConfigEntry` 泛型降级** — `ConfigEntry[XiaoDuCoordinator]` 是 2024.6 才支持的写法，在 2024.1~2024.5 会抛 `TypeError: type 'ConfigEntry' is not subscriptable`，且发生在模块顶层，导致**整个集成导入失败、条目完全无法 setup**。改为 `try/except` 探测后降级为非泛型
 - **在真实 2024.1.0 容器（Python 3.11.6）上端到端实测** — 17/17 模块导入、条目 setup 成功、读到真实状态（窗帘 `degree=50 ON`）、控制 50%→30% 16 秒到位，无任何 Traceback；同时复测 HA 2026.1.3 全部通过
 - **品牌图标换成小度官方图标** — 由此前的自制紫底字标改为小度官方 App 图标（红蓝气泡），并新增 `dark_icon.png` 深色主题版本
+
+</details>
 
 <details>
 <summary>v1.3.4（2026-10-31）· 支持 Home Assistant 2024.1.0 及以上</summary>
@@ -284,12 +293,23 @@ custom_components/xiaodu_reverse/
 本项目通过非官方接口访问小度云，仅用于个人学习与自用。接口结构由百度控制，可能随时变更。
 请勿用于商业用途，使用风险自负。
 
-## 致谢
+## 与上游项目的关系
 
-本集成参考了以下开源项目的实现思路：
+本项目在部分模块上派生自以下两个 MIT 许可项目，版权归原作者所有：
 
-- [RockJesus/ha-xiaodu](https://github.com/RockJesus/ha-xiaodu)
-- [2331892928/hass_xiaodu](https://github.com/2331892928/hass_xiaodu)
+| 项目 | 版权 | 派生模块 |
+|---|---|---|
+| [RockJesus/ha-xiaodu](https://github.com/RockJesus/ha-xiaodu) | Copyright (c) 2026 XiaoDu HA Integration | `login.py`（wappass 账密登录）、`config_flow.py`（登录与短信流程）、`appliance_types.py`（设备类型表） |
+| [2331892928/hass_xiaodu](https://github.com/2331892928/hass_xiaodu) | Copyright (c) 2024 AMEN | `api.py`（云端控制 API）、`appliance_types.py`（`panels` 解析）、`switch.py`（面板开关） |
+
+两个项目均为 MIT 许可，完整版权声明见 [LICENSE](LICENSE)，各派生文件头部也保留了对应声明。
+
+**关于 HACS 默认仓库**：`RockJesus/ha-xiaodu` 已收录于默认仓库并覆盖同类设备，两个集成连接同一套小度云 API，并存会造成用户与问题反馈分裂。因此本项目不申请进入默认仓库，仅作为自定义存储库分发。
+若你只需要基础控制，建议优先使用上游那个；本项目的增量主要在：
+
+- 用 `TurnOnPercentRequest` 设定窗帘开合百分比
+- 短信验证后走 `loginproxy` 换取 BDUSS 的完整链路
+- 更通用的 `panels` 解析
 
 ## License
 

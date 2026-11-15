@@ -1,3 +1,5 @@
+# Copyright (c) 2026 helloArmy
+# Portions Copyright (c) 2026 XiaoDu HA Integration (RockJesus/ha-xiaodu, MIT)
 """Config flow for the XiaoDu Reverse (小度反向接入) integration.
 
 Login follows RockJesus/ha-xiaodu: wappass account + password (with optional

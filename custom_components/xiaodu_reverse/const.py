@@ -1,3 +1,6 @@
+# Copyright (c) 2026 helloArmy
+# Portions Copyright (c) 2026 XiaoDu HA Integration (RockJesus/ha-xiaodu, MIT)
+# Portions Copyright (c) 2024 AMEN (2331892928/hass_xiaodu, MIT)
 """Constants for the XiaoDu Reverse (小度反向接入) integration.
 
 Domain layout

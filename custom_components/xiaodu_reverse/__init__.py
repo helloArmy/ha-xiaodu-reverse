@@ -1,3 +1,5 @@
+# Copyright (c) 2026 helloArmy
+# Portions Copyright (c) 2026 XiaoDu HA Integration (RockJesus/ha-xiaodu, MIT)
 """XiaoDu Reverse (小度反向接入) integration for Home Assistant.
 
 Brings the appliances that live in the XiaoDu / Baidu smart-home cloud back

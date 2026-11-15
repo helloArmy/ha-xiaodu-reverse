@@ -1,3 +1,6 @@
+# Copyright (c) 2026 helloArmy
+# Portions Copyright (c) 2026 XiaoDu HA Integration (RockJesus/ha-xiaodu, MIT)
+# Portions Copyright (c) 2024 AMEN (2331892928/hass_xiaodu, MIT)
 """Appliance type classification and ``panels`` parsing for XiaoDu.
 
 Type tables follow RockJesus/ha-xiaodu (``appliance_types.py``); the panel

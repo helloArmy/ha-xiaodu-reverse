@@ -1,3 +1,5 @@
+# Copyright (c) 2026 helloArmy
+# Portions Copyright (c) 2026 XiaoDu HA Integration (RockJesus/ha-xiaodu, MIT)
 """Baidu username/password login for the XiaoDu (小度) integration.
 
 Ported from RockJesus/ha-xiaodu (``custom_components/xiaodu/login.py``) so the

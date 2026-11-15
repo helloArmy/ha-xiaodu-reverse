@@ -1,3 +1,5 @@
+# Copyright (c) 2026 helloArmy
+# Portions Copyright (c) 2024 AMEN (2331892928/hass_xiaodu, MIT)
 """Switch platform for the XiaoDu Reverse integration.
 
 Besides the main on/off switch, this mirrors hass_xiaodu's panel behaviour:
