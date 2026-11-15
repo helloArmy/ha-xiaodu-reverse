@@ -188,11 +188,19 @@ custom_components/xiaodu_reverse/
 
 完整说明见 [Releases](https://github.com/helloArmy/ha-xiaodu-reverse/releases)。
 
-### v1.3.6（2026-11-15）· 补齐上游版权声明
+### v1.3.7（2026-11-15）· LICENSE 随集成分发
+
+- **`custom_components/xiaodu_reverse/LICENSE`** — HACS 只下载组件目录，仓库根目录的 LICENSE 不会跟着走，所以通过 HACS 安装的用户手里根本没有这个文件。复制一份进组件目录，随安装一起分发
+- 两份内容一致，根目录那份供 GitHub 识别，组件目录那份供分发
+
+<details>
+<summary>v1.3.6（2026-11-15）· 补齐上游版权声明</summary>
 
 - **LICENSE 补上两个上游项目的版权行** — 代码派生自 RockJesus/ha-xiaodu（`Copyright (c) 2026 XiaoDu HA Integration`）与 2331892928/hass_xiaodu（`Copyright (c) 2024 AMEN`），两者均为 MIT，原版权声明必须保留。此前 LICENSE 只有本项目自己的版权行
 - **7 个派生模块补文件头声明** — `__init__.py`、`api.py`、`appliance_types.py`、`config_flow.py`、`const.py`、`login.py`、`switch.py`
 - **README 新增「与上游项目的关系」** — 列出每个派生模块对应的上游与版权，并说明本项目不申请进入 HACS 默认仓库的原因
+
+</details>
 
 <details>
 <summary>v1.3.5（2026-10-31）· 实测支持 Home Assistant 2024.1.0</summary>
