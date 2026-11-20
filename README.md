@@ -188,10 +188,20 @@ custom_components/xiaodu_reverse/
 
 完整说明见 [Releases](https://github.com/helloArmy/ha-xiaodu-reverse/releases)。
 
-### v1.3.7（2026-11-15）· LICENSE 随集成分发
+### v1.3.8（2026-11-20）· 窗帘位置控制入参兜底
+
+- **缺参不再误关窗帘** — `async_set_cover_position` 原来写 `int(kwargs.get(ATTR_POSITION, 0))`，调用方没带 `position` 时会当成 0，直接下发关闭指令。改为取不到参数、或参数转不成数字时直接返回
+- **非数字入参不再抛异常** — `api.async_cover_set_position` 的 `int(percent)` 没有捕获异常，非法值会以 `ValueError` 冒泡到 HA。改为捕获后返回 `(False, "invalid_percent")`，不下发指令
+- **位置能力改按设备实际上报判定** — 此前无条件声明 `SET_POSITION`，不上报开合度的窗帘也会显示位置滑块。改为读到位置字段才声明，并在首次成功后锁存：云端偶发缺字段时滑块不会消失，首轮没回报的设备后续拿到会自动补上
+- **与上游保持一致** — 这三处与 [RockJesus/ha-xiaodu#2](https://github.com/RockJesus/ha-xiaodu/pull/2) 的最终实现一致，该 PR 已合并入上游
+
+<details>
+<summary>v1.3.7（2026-11-15）· LICENSE 随集成分发</summary>
 
 - **`custom_components/xiaodu_reverse/LICENSE`** — HACS 只下载组件目录，仓库根目录的 LICENSE 不会跟着走，所以通过 HACS 安装的用户手里根本没有这个文件。复制一份进组件目录，随安装一起分发
 - 两份内容一致，根目录那份供 GitHub 识别，组件目录那份供分发
+
+</details>
 
 <details>
 <summary>v1.3.6（2026-11-15）· 补齐上游版权声明</summary>
