@@ -421,7 +421,10 @@ class XiaoDuApi:
         The curtain is BLE-mesh proxied through a 小度 smart display, so it
         takes ~15 s to actually reach the target and report back.
         """
-        value = str(max(0, min(100, int(percent))))
+        try:
+            value = str(max(0, min(100, int(float(percent)))))
+        except (TypeError, ValueError):
+            return False, "invalid_percent"
         return await self.async_send_command(
             self._build_payload(
                 CMD_TURN_ON_PERCENT,

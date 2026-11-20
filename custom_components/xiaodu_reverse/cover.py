@@ -68,6 +68,9 @@ class XiaoDuCover(XiaoDuEntity, CoverEntity):
         """Initialize the cover."""
         super().__init__(coordinator, api, appliance_id, "cover")
         self._attr_name = None
+        # 按当前状态先判定一次能否设定位置；未判定成功时每次读属性都会复查。
+        self._supports_position = False
+        self._read_position()
 
     def _position_key(self) -> str | None:
         """Return the state key that carries the open percentage."""
@@ -76,27 +79,38 @@ class XiaoDuCover(XiaoDuEntity, CoverEntity):
                 return key
         return None
 
+    def _read_position(self) -> int | None:
+        """Return the open percentage (100 = fully open), if reported."""
+        key = self._position_key()
+        if key is None:
+            return None
+        try:
+            position = max(0, min(100, int(float(self.attr_value(key)))))
+        except (TypeError, ValueError):
+            return None
+        # 首次读到位置后锁存：云端偶发缺字段时滑块不会消失。
+        self._supports_position = True
+        return position
+
     @property
     def supported_features(self) -> CoverEntityFeature:
         """Return the supported cover features."""
-        return (
+        if not self._supports_position:
+            # 首轮没回报位置的设备，后续轮询拿到就自动补上。
+            self._read_position()
+        features = (
             CoverEntityFeature.OPEN
             | CoverEntityFeature.CLOSE
             | CoverEntityFeature.STOP
-            | CoverEntityFeature.SET_POSITION
         )
+        if self._supports_position:
+            features |= CoverEntityFeature.SET_POSITION
+        return features
 
     @property
     def current_cover_position(self) -> int | None:
         """Return the current position (100 = fully open)."""
-        key = self._position_key()
-        if key is None:
-            return None
-        raw = self.attr_value(key)
-        try:
-            return max(0, min(100, int(float(raw))))
-        except (TypeError, ValueError):
-            return None
+        return self._read_position()
 
     @property
     def is_closed(self) -> bool | None:
@@ -144,8 +158,12 @@ class XiaoDuCover(XiaoDuEntity, CoverEntity):
 
     async def async_set_cover_position(self, **kwargs: Any) -> None:
         """Move the cover to a given open percentage (0 = closed, 100 = open)."""
+        raw = kwargs.get(ATTR_POSITION)
+        if raw is None:
+            # 缺参时不能当成 0，否则会直接把窗帘关上。
+            return
         try:
-            position = int(kwargs.get(ATTR_POSITION, 0))
+            position = int(float(raw))
         except (TypeError, ValueError):
             return
         position = max(0, min(100, position))
