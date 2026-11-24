@@ -188,12 +188,21 @@ custom_components/xiaodu_reverse/
 
 完整说明见 [Releases](https://github.com/helloArmy/ha-xiaodu-reverse/releases)。
 
-### v1.3.8（2026-11-20）· 窗帘位置控制入参兜底
+### v1.3.9（2026-11-24）· 自动重登与手工登录统一链路
+
+- **自动重登改走 PC 端 passport** — 此前手工登录走 PC 端（`BaiduRelogin`），自动重登却走 wappass 移动端（`BaiduLogin`），两套会话不通用。实测三次登录失效触发的自动重登**全部被 400023 拦截，一次都没成功过**，等于自动重登形同虚设。现改为复用 `BaiduRelogin`，与手工登录完全同一条链路，同 IP、同设备指纹的重复登录通常可直接拿到 BDUSS
+- **重登失败会在界面上通知** — 四条失败路径（被风控要求验证、登录被拒、登录失败、连续 3 次失败）原本只写日志，设备停止更新时用户在界面上无从察觉。现在全部发出持久通知，`notification_id` 固定不会刷屏
+- **110001 / 810010 的提示改为临时故障** — 原文案称「这条路径目前走不通，请改用 BDUSS Cookie」，把偶发的系统繁忙（810010）和会话异常（110001）定性成了永久不可用。现在分别提示「等 10 秒左右重试」和「返回上一步重新登录后再发送」，Cookie 方式降级为多次重试失败后的兜底
+
+<details>
+<summary>v1.3.8（2026-11-20）· 窗帘位置控制入参兜底</summary>
 
 - **缺参不再误关窗帘** — `async_set_cover_position` 原来写 `int(kwargs.get(ATTR_POSITION, 0))`，调用方没带 `position` 时会当成 0，直接下发关闭指令。改为取不到参数、或参数转不成数字时直接返回
 - **非数字入参不再抛异常** — `api.async_cover_set_position` 的 `int(percent)` 没有捕获异常，非法值会以 `ValueError` 冒泡到 HA。改为捕获后返回 `(False, "invalid_percent")`，不下发指令
 - **位置能力改按设备实际上报判定** — 此前无条件声明 `SET_POSITION`，不上报开合度的窗帘也会显示位置滑块。改为读到位置字段才声明，并在首次成功后锁存：云端偶发缺字段时滑块不会消失，首轮没回报的设备后续拿到会自动补上
 - **与上游保持一致** — 这三处与 [RockJesus/ha-xiaodu#2](https://github.com/RockJesus/ha-xiaodu/pull/2) 的最终实现一致，该 PR 已合并入上游
+
+</details>
 
 <details>
 <summary>v1.3.7（2026-11-15）· LICENSE 随集成分发</summary>
