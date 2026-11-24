@@ -24,7 +24,7 @@ from .const import (
     DEFAULT_SCAN_INTERVAL,
     DOMAIN,
 )
-from .login import BaiduLogin, BaiduLoginBlocked, BaiduLoginError
+from .relogin import BaiduRelogin, ReloginError, ReloginRejected
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -168,7 +168,13 @@ class XiaoDuCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
         return merged
 
     async def _async_relogin(self) -> None:
-        """Re-login with the stored credentials and push the new BDUSS."""
+        """Re-login with the stored credentials and push the new BDUSS.
+
+        走与手工登录完全相同的 PC 端 passport 链路（``BaiduRelogin``）。
+        此前这里走的是 wappass 移动端（``BaiduLogin``），无浏览器环境时
+        几乎必被 400023 风控拦截（实测 2026-11-21 凌晨），导致自动重登
+        形同虚设；PC 端同 IP、同设备指纹的重复登录通常可直接拿到 BDUSS。
+        """
         entry = self.entry
         if entry is None:
             raise ConfigEntryAuthFailed("小度登录已失效，且没有可用于自动重登的凭据")
@@ -179,28 +185,37 @@ class XiaoDuCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
                 "小度登录已失效，且未保存账号密码，请重新登录"
             )
         if self._relogin_attempts >= 3:
+            self._notify_relogin_failed()
             raise ConfigEntryAuthFailed("小度自动重新登录连续失败，请手动重新登录")
 
         self._relogin_attempts += 1
         first_api = next(iter(self.apis.values()))
-        client = BaiduLogin(first_api.session)
+        client = BaiduRelogin(
+            first_api.session,
+            username,
+            password,
+            baiduid=entry.data.get(CONF_BAIDUID) or "",
+        )
         try:
-            result = await client.login(
-                username, password, baiduid=entry.data.get(CONF_BAIDUID) or ""
-            )
-        except BaiduLoginBlocked as exc:
-            _LOGGER.warning("小度自动重登被风控拦截: %s", exc)
-            raise ConfigEntryAuthFailed(
-                "小度登录失效，自动重登被百度风控要求短信验证，请手动重新登录"
-            ) from exc
-        except BaiduLoginError as exc:
+            bduss = await client.async_begin()
+        except ReloginRejected as exc:
+            _LOGGER.warning("小度自动重登被拒: %s", exc)
+            self._notify_relogin_failed()
+            raise ConfigEntryAuthFailed(f"小度自动重登被拒: {exc}") from exc
+        except ReloginError as exc:
             _LOGGER.warning("小度自动重登失败: %s", exc)
+            self._notify_relogin_failed()
             raise ConfigEntryAuthFailed(f"小度自动重登失败: {exc}") from exc
 
-        new_cookie = result.get("bduss") or ""
-        if not new_cookie:
-            raise ConfigEntryAuthFailed("小度自动重登未返回有效凭据")
+        if not bduss:
+            # 百度要求短信等二次验证，自动流程无法输入验证码。
+            _LOGGER.warning("小度自动重登需要短信验证，请手动重新登录")
+            self._notify_relogin_failed()
+            raise ConfigEntryAuthFailed(
+                "小度登录失效，自动重登需要短信验证，请手动重新登录"
+            )
 
+        new_cookie = bduss
         for api in self.apis.values():
             api.update_cookie(new_cookie)
         if new_cookie != entry.data.get(CONF_COOKIE):
@@ -208,6 +223,27 @@ class XiaoDuCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
                 entry, data={**entry.data, CONF_COOKIE: new_cookie}
             )
         _LOGGER.info("小度登录凭据已自动更新")
+
+    def _notify_relogin_failed(self) -> None:
+        """自动重登失败时发持久通知，避免只在日志里沉默失败。"""
+        if self.hass is None:
+            return
+        self.hass.async_create_task(
+            self.hass.services.async_call(
+                "persistent_notification",
+                "create",
+                {
+                    "title": "小度反向接入：登录已失效",
+                    "message": (
+                        "自动重新登录未能完成（可能被百度风控要求短信验证）。"
+                        "请到 设置 → 设备与服务 → 小度反向接入 重新认证，"
+                        "或直接更新 BDUSS Cookie。"
+                    ),
+                    "notification_id": "xiaodu_reverse_relogin_failed",
+                },
+                blocking=False,
+            )
+        )
 
 
 def build_scan_interval(entry: ConfigEntry) -> int:

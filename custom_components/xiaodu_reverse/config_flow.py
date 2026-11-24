@@ -323,11 +323,17 @@ class XiaoDuReverseConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     errors["base"] = ERROR_SMS_FAILED
                     code = str(result.get("code") or "")
                     msg = str(result.get("message") or "")
-                    if code in ("110001", "810010"):
-                        # 实测：服务器发起的 120021 会话，验证控件恒返回参数错误
+                    if code == "810010":
+                        # 810010 是百度侧系统繁忙，偶发；同账号并发登录也会触发
                         detail = (
-                            f"百度拒绝了服务器发起的短信验证（{code} {msg}）。"
-                            "这条路径目前走不通，请改用「更新 BDUSS Cookie」方式。"
+                            "百度系统繁忙（810010），请等 10 秒左右再点一次「发送验证码」。"
+                            "多次重试仍失败时，可改用「更新 BDUSS Cookie」方式。"
+                        )
+                    elif code == "110001":
+                        # 110001 与本次会话的参数/cookie 有关，重新走一遍登录通常可恢复
+                        detail = (
+                            f"验证会话异常（110001 {msg}），请返回上一步重新登录后再发送。"
+                            "多次重试仍失败时，可改用「更新 BDUSS Cookie」方式。"
                         )
                     else:
                         detail = f"百度未接受发送请求：{str(result)[:160]}"
@@ -769,11 +775,17 @@ class XiaoDuReverseOptionsFlow(config_entries.OptionsFlow):
                     errors["base"] = ERROR_SMS_FAILED
                     code = str(result.get("code") or "")
                     msg = str(result.get("message") or "")
-                    if code in ("110001", "810010"):
-                        # 实测：服务器发起的 120021 会话，验证控件恒返回参数错误
+                    if code == "810010":
+                        # 810010 是百度侧系统繁忙，偶发；同账号并发登录也会触发
                         detail = (
-                            f"百度拒绝了服务器发起的短信验证（{code} {msg}）。"
-                            "这条路径目前走不通，请改用「更新 BDUSS Cookie」方式。"
+                            "百度系统繁忙（810010），请等 10 秒左右再点一次「发送验证码」。"
+                            "多次重试仍失败时，可改用「更新 BDUSS Cookie」方式。"
+                        )
+                    elif code == "110001":
+                        # 110001 与本次会话的参数/cookie 有关，重新走一遍登录通常可恢复
+                        detail = (
+                            f"验证会话异常（110001 {msg}），请返回上一步重新登录后再发送。"
+                            "多次重试仍失败时，可改用「更新 BDUSS Cookie」方式。"
                         )
                     else:
                         detail = f"百度未接受发送请求：{str(result)[:160]}"
